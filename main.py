@@ -2,6 +2,9 @@ import logging
 import datetime
 import pytz
 import gspread
+import os
+import json
+import gspread
 from flask import Flask
 from threading import Thread
 from telegram import Update
@@ -11,10 +14,15 @@ from oauth2client.service_account import ServiceAccountCredentials
 # ========== CONFIG GOOGLE SHEETS ==========
 SHEET_ID = "1ASeRadkkokhqOflRETw6sGJTyJ65Y0XQi5mvFmivLnY"
 SHEET_NAME = "Sheet1"
-CREDENTIAL_PATH = "credentials.json"
+
+# ✅ Lấy credentials từ biến môi trường GOOGLE_CREDS_JSON
+GOOGLE_CREDS_JSON = os.environ.get("GOOGLE_CREDS_JSON")
+if not GOOGLE_CREDS_JSON:
+    raise ValueError("❌ GOOGLE_CREDS_JSON environment variable is missing!")
 
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-credentials = ServiceAccountCredentials.from_json_keyfile_name(CREDENTIAL_PATH, scope)
+credentials_dict = json.loads(GOOGLE_CREDS_JSON)
+credentials = ServiceAccountCredentials.from_json_keyfile_dict(credentials_dict, scope)
 gc = gspread.authorize(credentials)
 sheet = gc.open_by_key(SHEET_ID).worksheet(SHEET_NAME)
 
