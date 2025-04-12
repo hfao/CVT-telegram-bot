@@ -160,4 +160,4 @@ cython_debug/
 #.idea/
 
 # Ignore credentials and all JSON keys
-*.json
+credentials.json
