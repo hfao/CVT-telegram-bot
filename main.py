@@ -4,7 +4,6 @@ import pytz
 import gspread
 import os
 import json
-import gspread
 from time import time
 from flask import Flask
 from threading import Thread
@@ -12,17 +11,17 @@ from telegram import Update
 from telegram.ext import Application, MessageHandler, CallbackContext, filters
 from oauth2client.service_account import ServiceAccountCredentials
 
-# ====== CACHE GOOGLE SHEET DỮ LIỆU NHÓM ======
+# ====== CACHE GOOGLE SHEET Dữ LIỆU NHÓM ======
 GROUP_CACHE = {
     "data": [],
     "last_updated": 0
 }
 CACHE_TTL = 300  # giây (5 phút)
+
 # ========== CONFIG GOOGLE SHEETS ==========
 SHEET_ID = "1ASeRadkkokhqOflRETw6sGJTyJ65Y0XQi5mvFmivLnY"
 SHEET_NAME = "Sheet1"
 
-# ✅ Lấy credentials từ biến môi trường GOOGLE_CREDS_JSON
 GOOGLE_CREDS_JSON = os.environ.get("GOOGLE_CREDS_JSON")
 if not GOOGLE_CREDS_JSON:
     raise ValueError("❌ GOOGLE_CREDS_JSON environment variable is missing!")
@@ -32,6 +31,7 @@ credentials_dict = json.loads(GOOGLE_CREDS_JSON)
 credentials = ServiceAccountCredentials.from_json_keyfile_dict(credentials_dict, scope)
 gc = gspread.authorize(credentials)
 sheet = gc.open_by_key(SHEET_ID).worksheet(SHEET_NAME)
+
 def get_cached_group_data():
     now = time()
     if now - GROUP_CACHE["last_updated"] > CACHE_TTL:
@@ -94,25 +94,23 @@ async def welcome_new_member(update: Update, context: CallbackContext):
 async def handle_message(update: Update, context: CallbackContext):
     msg = update.message
 
-    # ❌ Bỏ qua nếu không phải tin nhắn hoặc là bot gửi
     if not msg or msg.from_user.is_bot:
         return
 
-    # ✅ Chỉ xử lý các nhóm đã active trong Sheet
     chat_id = update.effective_chat.id
     if not is_group_active(chat_id):
         return
 
-    # 🚫 Bỏ qua tin nhắn forward từ user khác hoặc từ channel
-    if getattr(msg, "forward_from", None) or getattr(msg, "forward_from_chat", None):
+    if hasattr(msg, "forward_from") and msg.forward_from and msg.forward_from.is_bot:
+        return
+    if hasattr(msg, "forward_from_chat") and msg.forward_from_chat:
         return
 
-    # 🔗 Bỏ qua nếu chứa link hoặc @username (có thể là bot khác)
     if msg.text:
         lowered = msg.text.lower()
-        if any(keyword in lowered for keyword in ["http", "t.me/", "@", "bit.ly", "/start"]):
+        if any(x in lowered for x in ["http", "t.me/", "@bot", "vpn", "@speeeedvpnbot"]):
             return
- 	# 👉 Tiếp tục xử lý logic xác nhận
+
     user_id = update.message.from_user.id
     is_office_hours = check_office_hours()
     current_state = user_states.get(user_id)
@@ -123,7 +121,7 @@ async def handle_message(update: Update, context: CallbackContext):
             "Cảm ơn Quý khách đã liên hệ với Công ty Cổ phần Tư vấn và Đầu tư CVT.\n"
             "Chúng tôi sẽ phản hồi trong thời gian sớm nhất.\n\n"
             "🕒 Giờ làm việc: 08:30 – 17:00 (Thứ 2 đến Thứ 7, không tính thời gian nghỉ trưa)\n"
-            "📅 Chủ nhật & Ngày lễ: Nghỉ\n\n"
+            "🗓 Chủ nhật & Ngày lễ: Nghỉ\n\n"
             "Ngoài giờ làm việc, Quý khách vui lòng để lại tin nhắn – chúng tôi sẽ phản hồi ngay khi làm việc sớm nhất."
         )
         await update.message.reply_text(message)
@@ -180,7 +178,7 @@ def keep_alive():
     Thread(target=run_web).start()
 
 def main():
-    token = "8131925759:AAGDAQA8gojjkhLXaf-IzV0J-Heu-J2s1nI"
+    token = os.environ.get("BOT_TOKEN")
     application = Application.builder().token(token).build()
 
     application.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, welcome_new_member))
