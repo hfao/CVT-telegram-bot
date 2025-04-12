@@ -5,12 +5,19 @@ import gspread
 import os
 import json
 import gspread
+from time import time
 from flask import Flask
 from threading import Thread
 from telegram import Update
 from telegram.ext import Application, MessageHandler, CallbackContext, filters
 from oauth2client.service_account import ServiceAccountCredentials
 
+# ====== CACHE GOOGLE SHEET DỮ LIỆU NHÓM ======
+GROUP_CACHE = {
+    "data": [],
+    "last_updated": 0
+}
+CACHE_TTL = 300  # giây (5 phút)
 # ========== CONFIG GOOGLE SHEETS ==========
 SHEET_ID = "1ASeRadkkokhqOflRETw6sGJTyJ65Y0XQi5mvFmivLnY"
 SHEET_NAME = "Sheet1"
@@ -25,6 +32,12 @@ credentials_dict = json.loads(GOOGLE_CREDS_JSON)
 credentials = ServiceAccountCredentials.from_json_keyfile_dict(credentials_dict, scope)
 gc = gspread.authorize(credentials)
 sheet = gc.open_by_key(SHEET_ID).worksheet(SHEET_NAME)
+def get_cached_group_data():
+    now = time()
+    if now - GROUP_CACHE["last_updated"] > CACHE_TTL:
+        GROUP_CACHE["data"] = sheet.get_all_records()
+        GROUP_CACHE["last_updated"] = now
+    return GROUP_CACHE["data"]
 
 # ========== LOGGING ==========
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
@@ -41,14 +54,14 @@ def check_office_hours() -> bool:
     return False
 
 def is_group_active(group_id: int) -> bool:
-    records = sheet.get_all_records()
+    records = get_cached_group_data()
     for row in records:
         if str(row["group_id"]) == str(group_id) and str(row["active"]).lower() == "true":
             return True
     return False
 
 def is_group_registered(group_id: int) -> bool:
-    records = sheet.get_all_records()
+    records = get_cached_group_data()
     return any(str(row["group_id"]) == str(group_id) for row in records)
 
 async def welcome_new_member(update: Update, context: CallbackContext):
@@ -79,20 +92,29 @@ async def welcome_new_member(update: Update, context: CallbackContext):
         await update.message.reply_text(message)
 
 async def handle_message(update: Update, context: CallbackContext):
-    if not update.message or update.message.from_user.is_bot:
+    msg = update.message
+
+    # ❌ Bỏ qua nếu không phải tin nhắn hoặc là bot gửi
+    if not msg or msg.from_user.is_bot:
         return
 
-    if update.message.forward_from or update.message.forward_from_chat:
-        return
-
-    text = update.message.text or ""
-    if "@" in text or "http" in text or "t.me/" in text:
-        return
-
+    # ✅ Chỉ xử lý các nhóm đã active trong Sheet
     chat_id = update.effective_chat.id
     if not is_group_active(chat_id):
         return
 
+    # 🚫 Bỏ qua tin nhắn forward từ user khác hoặc channel
+    if hasattr(msg, "forward_from") and msg.forward_from and msg.forward_from.is_bot:
+        return
+    if hasattr(msg, "forward_from_chat") and msg.forward_from_chat:
+        return
+
+    # 🔗 Bỏ qua nếu chứa link lạ hoặc mention đến bot
+    if msg.text:
+        lowered = msg.text.lower()
+        if "http" in lowered or "t.me/" in lowered or "@bot" in lowered:
+            return
+ 	# 👉 Tiếp tục xử lý logic xác nhận
     user_id = update.message.from_user.id
     is_office_hours = check_office_hours()
     current_state = user_states.get(user_id)
