@@ -11,7 +11,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 # ========== CONFIG GOOGLE SHEETS ==========
 SHEET_ID = "1ASeRadkkokhqOflRETw6sGJTyJ65Y0XQi5mvFmivLnY"
 SHEET_NAME = "Sheet1"
-CREDENTIAL_PATH = "savvy-factor-447514-f8-9c7fe479b1b5.json"
+CREDENTIAL_PATH = "credentials.json"
 
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
 credentials = ServiceAccountCredentials.from_json_keyfile_name(CREDENTIAL_PATH, scope)
