@@ -103,16 +103,14 @@ async def handle_message(update: Update, context: CallbackContext):
     if not is_group_active(chat_id):
         return
 
-    # 🚫 Bỏ qua tin nhắn forward từ user khác hoặc channel
-    if hasattr(msg, "forward_from") and msg.forward_from and msg.forward_from.is_bot:
-        return
-    if hasattr(msg, "forward_from_chat") and msg.forward_from_chat:
+    # 🚫 Bỏ qua tin nhắn forward từ user khác hoặc từ channel
+    if getattr(msg, "forward_from", None) or getattr(msg, "forward_from_chat", None):
         return
 
-    # 🔗 Bỏ qua nếu chứa link lạ hoặc mention đến bot
+    # 🔗 Bỏ qua nếu chứa link hoặc @username (có thể là bot khác)
     if msg.text:
         lowered = msg.text.lower()
-        if "http" in lowered or "t.me/" in lowered or "@bot" in lowered:
+        if any(keyword in lowered for keyword in ["http", "t.me/", "@", "bit.ly", "/start"]):
             return
  	# 👉 Tiếp tục xử lý logic xác nhận
     user_id = update.message.from_user.id
