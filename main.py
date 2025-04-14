@@ -152,10 +152,10 @@ async def send_confirmation(update: Update):
         text = f"✅ CVT đã nhận được tài liệu.\n📄 Tên file: {msg.document.file_name}"
     elif msg.video:
         duration = str(datetime.timedelta(seconds=msg.video.duration))
-        text = f"✅ CVT đã nhận được video.\n🎙 Thời lượng: {duration}"
+        text = f"✅ CVT đã nhận được video.\n🎧 Thời lượng: {duration}"
     elif msg.voice:
         duration = str(datetime.timedelta(seconds=msg.voice.duration))
-        text = f"✅ CVT đã nhận được tin nhắn thoại.\n🎙 Thời lượng: {duration}"
+        text = f"✅ CVT đã nhận được tin nhắn thoại.\n🎧 Thời lượng: {duration}"
     else:
         text = "✅ CVT đã nhận được tin nhắn."
 
@@ -190,7 +190,7 @@ def main():
     application.add_error_handler(error)
     keep_alive()
 
-    # ❌ Bỏ qua tin nhắn cũ khi bot khởi động
+    # ✅ Chắc chắn không xử lý tin nhắn cũ khi bot restart
     application.run_polling(drop_pending_updates=True)
 
 if __name__ == '__main__':
