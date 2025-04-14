@@ -40,7 +40,11 @@ def get_cached_group_data():
     return GROUP_CACHE["data"]
 
 # ========== LOGGING ==========
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO,
+    handlers=[logging.FileHandler("bot.log"), logging.StreamHandler()]
+)
 logger = logging.getLogger(__name__)
 
 user_states = {}
@@ -101,14 +105,17 @@ async def handle_message(update: Update, context: CallbackContext):
     if not is_group_active(chat_id):
         return
 
-    if hasattr(msg, "forward_from") and msg.forward_from and msg.forward_from.is_bot:
-        return
-    if hasattr(msg, "forward_from_chat") and msg.forward_from_chat:
+    # 🚫 Bỏ qua mọi tin nhắn bị forward
+    if getattr(msg, "forward_from", None) or getattr(msg, "forward_from_chat", None):
+        logger.warning(f"❌ Bị chặn: Tin nhắn forward từ user hoặc channel - {msg.text}")
         return
 
+    # 🚫 Bỏ qua các tin nhắn chứa từ khóa spam/quảng cáo
     if msg.text:
         lowered = msg.text.lower()
-        if any(x in lowered for x in ["http", "t.me/", "@bot", "vpn", "@speeeedvpnbot"]):
+        spam_keywords = ["http", "t.me/", "@bot", "vpn", "@speeeedvpnbot", "free", "trial", "proxy", "telegram bot", "subscribe"]
+        if any(keyword in lowered for keyword in spam_keywords):
+            logger.warning(f"❌ Bị chặn: Tin nhắn chứa spam keyword - {msg.text}")
             return
 
     user_id = update.message.from_user.id
