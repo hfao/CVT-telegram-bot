@@ -49,7 +49,6 @@ logger = logging.getLogger(__name__)
 
 user_states = {}
 
-
 def check_office_hours() -> bool:
     tz = pytz.timezone('Asia/Ho_Chi_Minh')
     now = datetime.datetime.now(tz)
@@ -58,7 +57,6 @@ def check_office_hours() -> bool:
             return True
     return False
 
-
 def is_group_active(group_id: int) -> bool:
     records = get_cached_group_data()
     for row in records:
@@ -66,11 +64,9 @@ def is_group_active(group_id: int) -> bool:
             return True
     return False
 
-
 def is_group_registered(group_id: int) -> bool:
     records = get_cached_group_data()
     return any(str(row["group_id"]) == str(group_id) for row in records)
-
 
 async def welcome_new_member(update: Update, context: CallbackContext):
     chat = update.effective_chat
@@ -94,11 +90,9 @@ async def welcome_new_member(update: Update, context: CallbackContext):
         message = (
             "Xin chào Quý khách.\n"
             "Cảm ơn Quý khách đã tin tưởng sử dụng dịch vụ của CVT.\n"
-            "Nếu Quý khách cần hỗ trợ hoặc có bất kỳ vấn đề nào cần trao đổi, "
-            "vui lòng để lại tin nhắn tại đây. Đội ngũ tư vấn sẽ theo dõi và phản hồi Quý khách trong thời gian sớm nhất có thể ạ."
+            "Nếu Quý khách cần hỗ trợ hoặc có bất kỳ vấn đề nào cần trao đổi, vui lòng để lại tin nhắn tại đây. Đội ngũ tư vấn sẽ theo dõi và phản hồi Quý khách trong thời gian sớm nhất có thể ạ."
         )
         await update.message.reply_text(message)
-
 
 async def handle_message(update: Update, context: CallbackContext):
     msg = update.message
@@ -110,17 +104,15 @@ async def handle_message(update: Update, context: CallbackContext):
     if not is_group_active(chat_id):
         return
 
-    # 🚫 Bỏ qua mọi tin nhắn bị forward
     if getattr(msg, "forward_from", None) or getattr(msg, "forward_from_chat", None):
-        logger.warning(f"❌ Bị chặn: Tin nhắn forward từ user hoặc channel - {msg.text}")
+        logger.warning(f"❌ Bị chặn: Tin nhắn forward - {msg.text}")
         return
 
-    # 🚫 Bỏ qua các tin nhắn chứa từ khóa spam/quảng cáo
     if msg.text:
         lowered = msg.text.lower()
         spam_keywords = ["http", "t.me/", "@bot", "vpn", "@speeeedvpnbot", "free", "trial", "proxy", "telegram bot", "subscribe"]
         if any(keyword in lowered for keyword in spam_keywords):
-            logger.warning(f"❌ Bị chặn: Tin nhắn chứa spam keyword - {msg.text}")
+            logger.warning(f"❌ Bị chặn: Tin nhắn spam - {msg.text}")
             return
 
     user_id = update.message.from_user.id
@@ -128,22 +120,20 @@ async def handle_message(update: Update, context: CallbackContext):
     current_state = user_states.get(user_id)
 
     if not is_office_hours and current_state != "notified_out_of_office":
-        message = (
+        await update.message.reply_text(
             "🎉 Xin chào Quý khách!\n"
-            "Cảm ơn Quý khách đã liên hệ với Công ty Cổ phần Tư vấn và Đầu tư CVT.\n"
+            "Cảm ơn Quý khách đã liên hệ với CVT.\n"
             "Chúng tôi sẽ phản hồi trong thời gian sớm nhất.\n\n"
-            "🕒 Giờ làm việc: 08:30 – 17:00 (Thứ 2 đến Thứ 7, không tính thời gian nghỉ trưa)\n"
-            "🗓 Chủ nhật & Ngày lễ: Nghỉ\n\n"
-            "Ngoài giờ làm việc, Quý khách vui lòng để lại tin nhắn – chúng tôi sẽ phản hồi ngay khi làm việc sớm nhất."
+            "🕒 Giờ làm việc: 08:30 – 17:00 (Thứ 2 đến Thứ 7)\n"
+            "🗓 Chủ nhật & Ngày lễ: Nghỉ"
         )
-        await update.message.reply_text(message)
         user_states[user_id] = "notified_out_of_office"
         return
 
     if not is_office_hours and current_state == "notified_out_of_office":
         await update.message.reply_text(
-            "🌙 Hiện tại, Công ty Cổ phần Tư vấn và Đầu tư CVT đang ngoài giờ làm việc (08:30 – 17:00, Thứ 2 đến Thứ 7, không tính thời gian nghỉ trưa).\n"
-            "Quý khách vui lòng để lại tin nhắn – chúng tôi sẽ liên hệ lại trong thời gian làm việc sớm nhất.\n"
+            "🌙 CVT hiện đang ngoài giờ làm việc.\n"
+            "Vui lòng để lại tin nhắn, chúng tôi sẽ liên hệ lại trong giờ làm việc sớm nhất.\n"
             "Trân trọng cảm ơn!"
         )
         return
@@ -151,38 +141,28 @@ async def handle_message(update: Update, context: CallbackContext):
     await send_confirmation(update)
     user_states[user_id] = "active"
 
-
 async def send_confirmation(update: Update):
     msg = update.message
     text = ""
 
     if msg.photo:
-        text = "✅ CVT đã nhận được hình ảnh của quý khách."
+        text = "✅ CVT đã nhận được hình ảnh."
     elif msg.document:
         text = f"✅ CVT đã nhận được tài liệu.\n📄 Tên file: {msg.document.file_name}"
     elif msg.video:
         duration = str(datetime.timedelta(seconds=msg.video.duration))
-        text = f"✅ CVT đã nhận được video.\n⏱ Thời lượng: {duration}"
+        text = f"✅ CVT đã nhận được video.\n🎙 Thời lượng: {duration}"
     elif msg.voice:
         duration = str(datetime.timedelta(seconds=msg.voice.duration))
-        text = f"✅ CVT đã nhận được tin nhắn thoại.\n⏱ Thời lượng: {duration}"
+        text = f"✅ CVT đã nhận được tin nhắn thoại.\n🎙 Thời lượng: {duration}"
     else:
-        text = "✅ CVT đã nhận được tin nhắn của quý khách."
+        text = "✅ CVT đã nhận được tin nhắn."
 
-    follow_up = (
-        "\nBộ phận Dịch vụ khách hàng sẽ phản hồi trong thời gian sớm nhất.\n"
-        "Cảm ơn Quý khách đã tin tưởng CVT!"
-    )
+    follow_up = ("\nBộ phận CSKH sẽ phản hồi sớm nhất.\nCảm ơn Quý khách!")
     await msg.reply_text(text + follow_up)
-
 
 async def error(update: Update, context: CallbackContext) -> None:
     logger.warning(f'Update {update} caused error {context.error}')
-
-
-async def delete_old_updates(application):
-    await application.bot.delete_webhook(drop_pending_updates=True)
-
 
 app = Flask('')
 
@@ -207,13 +187,10 @@ def main():
     ))
 
     application.add_error_handler(error)
-
-    # Xoá update cũ trước khi chạy
-    application.initialize()
-    application.run_async(delete_old_updates(application))
-
     keep_alive()
-    application.run_polling()
+
+    # ❌ Bỏ qua tin nhắn cũ khi bot khởi động
+    application.run_polling(drop_pending_updates=True)
 
 if __name__ == '__main__':
     main()
