@@ -122,18 +122,19 @@ async def handle_message(update: Update, context: CallbackContext):
     if not is_office_hours and current_state != "notified_out_of_office":
         await update.message.reply_text(
             "🎉 Xin chào Quý khách!\n"
-            "Cảm ơn Quý khách đã liên hệ với CVT.\n"
+            "Cảm ơn Quý khách đã liên hệ với Công ty Cổ phần Tư vấn và Đầu tư CVT.\n"
             "Chúng tôi sẽ phản hồi trong thời gian sớm nhất.\n\n"
-            "🕒 Giờ làm việc: 08:30 – 17:00 (Thứ 2 đến Thứ 7)\n"
-            "🗓 Chủ nhật & Ngày lễ: Nghỉ"
+            "🕒 Giờ làm việc: 08:30 – 17:00 (Thứ 2 đến Thứ 7, không tính thời gian nghỉ trưa).\n"
+            "🗓  Chủ nhật & Ngày lễ: Nghỉ.\n"
+            "Ngoài giờ làm việc, Quý khách vui lòng để lại tin nhắn – chúng tôi sẽ phản hồi ngay khi làm việc sớm nhất."
         )
         user_states[user_id] = "notified_out_of_office"
         return
 
     if not is_office_hours and current_state == "notified_out_of_office":
         await update.message.reply_text(
-            "🌙 CVT hiện đang ngoài giờ làm việc.\n"
-            "Vui lòng để lại tin nhắn, chúng tôi sẽ liên hệ lại trong giờ làm việc sớm nhất.\n"
+            "🌙 Hiện tại, Công ty Cổ phần Tư vấn và Đầu tư CVT đang ngoài giờ làm việc (08:30 – 17:00, Thứ 2 đến Thứ 7, không tính thời gian nghỉ trưa).\n"
+            "Quý khách vui lòng để lại tin nhắn – chúng tôi sẽ liên hệ lại trong thời gian làm việc sớm nhất.\n"
             "Trân trọng cảm ơn!"
         )
         return
@@ -158,7 +159,7 @@ async def send_confirmation(update: Update):
     else:
         text = "✅ CVT đã nhận được tin nhắn."
 
-    follow_up = ("\nBộ phận CSKH sẽ phản hồi sớm nhất.\nCảm ơn Quý khách!")
+    follow_up = ("\nBộ phận Dịch vụ khách hàng sẽ phản hồi trong thời gian sớm nhất.\nCảm ơn Quý khách!")
     await msg.reply_text(text + follow_up)
 
 async def error(update: Update, context: CallbackContext) -> None:
