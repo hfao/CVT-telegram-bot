@@ -49,6 +49,7 @@ logger = logging.getLogger(__name__)
 
 user_states = {}
 
+
 def check_office_hours() -> bool:
     tz = pytz.timezone('Asia/Ho_Chi_Minh')
     now = datetime.datetime.now(tz)
@@ -57,6 +58,7 @@ def check_office_hours() -> bool:
             return True
     return False
 
+
 def is_group_active(group_id: int) -> bool:
     records = get_cached_group_data()
     for row in records:
@@ -64,9 +66,11 @@ def is_group_active(group_id: int) -> bool:
             return True
     return False
 
+
 def is_group_registered(group_id: int) -> bool:
     records = get_cached_group_data()
     return any(str(row["group_id"]) == str(group_id) for row in records)
+
 
 async def welcome_new_member(update: Update, context: CallbackContext):
     chat = update.effective_chat
@@ -94,6 +98,7 @@ async def welcome_new_member(update: Update, context: CallbackContext):
             "vui lòng để lại tin nhắn tại đây. Đội ngũ tư vấn sẽ theo dõi và phản hồi Quý khách trong thời gian sớm nhất có thể ạ."
         )
         await update.message.reply_text(message)
+
 
 async def handle_message(update: Update, context: CallbackContext):
     msg = update.message
@@ -146,6 +151,7 @@ async def handle_message(update: Update, context: CallbackContext):
     await send_confirmation(update)
     user_states[user_id] = "active"
 
+
 async def send_confirmation(update: Update):
     msg = update.message
     text = ""
@@ -169,8 +175,14 @@ async def send_confirmation(update: Update):
     )
     await msg.reply_text(text + follow_up)
 
+
 async def error(update: Update, context: CallbackContext) -> None:
     logger.warning(f'Update {update} caused error {context.error}')
+
+
+async def delete_old_updates(application):
+    await application.bot.delete_webhook(drop_pending_updates=True)
+
 
 app = Flask('')
 
@@ -195,6 +207,11 @@ def main():
     ))
 
     application.add_error_handler(error)
+
+    # Xoá update cũ trước khi chạy
+    application.initialize()
+    application.run_async(delete_old_updates(application))
+
     keep_alive()
     application.run_polling()
 
