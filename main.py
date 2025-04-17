@@ -74,7 +74,7 @@ async def handle_message(update: Update, context: CallbackContext):
     
     # Kiểm tra nhóm xem có nhân viên nội bộ không trước khi phản hồi
     chat_id = update.effective_chat.id
-    if await check_internal_users_in_group(chat_id, context):  # Truyền context vào
+    if await check_internal_users_in_group(chat_id, context):  # Đảm bảo truyền context vào
         logger.info(f"Nhóm {chat_id} có nhân viên nội bộ. Bot không phản hồi khách hàng.")
         return  # Nếu có nhân viên trong nhóm, bot không phản hồi khách hàng
 
