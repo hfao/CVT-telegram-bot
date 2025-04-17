@@ -40,19 +40,15 @@ def get_cached_group_data():
     return GROUP_CACHE["data"]
 
 # Kiểm tra sự có mặt của nhân viên trong nhóm
+# Hàm kiểm tra sự có mặt của nhân viên trong nhóm (liên tục kiểm tra nhóm khi có tin nhắn)
 async def check_internal_users_in_group(chat_id, context):
     try:
         # Lấy danh sách tất cả các quản trị viên của nhóm
         members = await context.bot.get_chat_administrators(chat_id)
-
+        
         # Lọc ra danh sách các ID và tên của các quản trị viên
         current_user_ids = [admin.user.id for admin in members]
         current_user_names = [admin.user.full_name for admin in members]
-        
-        # Log chi tiết ID và tên của các quản trị viên hiện tại
-        logger.info(f"Nhóm {chat_id} có các quản trị viên sau:")
-        for uid, name in zip(current_user_ids, current_user_names):
-            logger.info(f" - ID: {uid}, Tên: {name}")
 
         # Kiểm tra nếu có bất kỳ nhân viên nào trong danh sách nội bộ
         for uid, name in zip(current_user_ids, current_user_names):
@@ -64,7 +60,6 @@ async def check_internal_users_in_group(chat_id, context):
         logger.error(f"Lỗi khi kiểm tra nhân viên trong nhóm {chat_id}: {e}")
     
     return False  # Nhóm không có nhân viên nội bộ, bot sẽ phản hồi
-
 # ========== LOGGING ==========
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -126,7 +121,7 @@ async def welcome_new_member(update: Update, context: CallbackContext):
 async def handle_message(update: Update, context: CallbackContext):
     msg = update.message
     logger.info(f"🧩 Nhận từ user: {msg.from_user.full_name} - ID: {msg.from_user.id}")
-
+    
     # Kiểm tra xem có phải là tin nhắn từ nhân viên nội bộ không
     if msg.from_user.id in INTERNAL_USERS_ID:
         logger.info(f"⏩ Bỏ qua tin nhắn từ nhân viên nội bộ: {msg.from_user.full_name} - ID: {msg.from_user.id}")
@@ -134,7 +129,7 @@ async def handle_message(update: Update, context: CallbackContext):
     
     # Kiểm tra nhóm xem có nhân viên nội bộ không trước khi phản hồi
     chat_id = update.effective_chat.id
-    if await check_internal_users_in_group(chat_id, context):  # Đảm bảo truyền context vào
+    if await check_internal_users_in_group(chat_id, context):  # Đảm bảo truyền context vào để kiểm tra lại nhóm
         logger.info(f"Nhóm {chat_id} có nhân viên nội bộ. Bot không phản hồi khách hàng.")
         return  # Nếu có nhân viên trong nhóm, bot không phản hồi khách hàng
 
