@@ -96,6 +96,14 @@ async def welcome_new_member(update: Update, context: CallbackContext):
 
 async def handle_message(update: Update, context: CallbackContext):
     msg = update.message
+    
+    # Danh sách user_id của nội bộ (thay bằng ID thật của 4 người trong công ty bạn)
+    INTERNAL_USERS_ID = [123456789, 987654321, 1122334455, 5566778899]
+
+    # Bỏ qua tin nhắn từ nội bộ (không phản hồi)
+    if msg.from_user.id in INTERNAL_USERS_ID:
+        logger.info(f"⏩ Bỏ qua tin nhắn từ nội bộ: {msg.from_user.full_name} - ID: {msg.from_user.id}")
+        return
 
     if not msg or msg.from_user.is_bot:
         return
