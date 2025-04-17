@@ -124,7 +124,7 @@ async def welcome_new_member(update: Update, context: CallbackContext):
 
 # Hàm xử lý tin nhắn từ khách hàng
 async def handle_message(update: Update, context: CallbackContext):
-     msg = update.message
+    msg = update.message
     logger.info(f"🧩 Nhận từ user: {msg.from_user.full_name} - ID: {msg.from_user.id}")
 
     # Kiểm tra xem có phải là tin nhắn từ nhân viên nội bộ không
