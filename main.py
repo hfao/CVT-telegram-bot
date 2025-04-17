@@ -96,7 +96,8 @@ async def welcome_new_member(update: Update, context: CallbackContext):
 
 async def handle_message(update: Update, context: CallbackContext):
     msg = update.message
-    print("🔥 Nhận được tin nhắn:", msg.text)
+    print("👉 ID:", msg.from_user.id, "-", msg.from_user.full_name)
+    logger.info(f"🧩 Nhận từ user: {msg.from_user.full_name} - ID: {msg.from_user.id}")
     # Danh sách user_id của nội bộ (thay bằng ID thật của 4 người trong công ty bạn)
     INTERNAL_USERS_ID = [123456789, 987654321, 1122334455, 5566778899]
 
