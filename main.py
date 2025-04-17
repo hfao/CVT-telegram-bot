@@ -12,14 +12,10 @@ from telegram.ext import Application, MessageHandler, CallbackContext, filters
 from oauth2client.service_account import ServiceAccountCredentials
 
 # ====== Danh sách ID nhân viên nội bộ ======
-# Đây là các user_id của nhân viên trong công ty (cần thay bằng ID thực tế)
 INTERNAL_USERS_ID = [7934716459, 7985186615, 6129180120, 6278235756]
 
 # ====== CACHE GOOGLE SHEET Dữ LIỆU NHÓM ======
-GROUP_CACHE = {
-    "data": [],
-    "last_updated": 0
-}
+GROUP_CACHE = {"data": [], "last_updated": 0}
 CACHE_TTL = 300  # giây (5 phút)
 
 # ========== CONFIG GOOGLE SHEETS ==========
@@ -62,30 +58,6 @@ async def check_internal_users_in_group(chat_id, context):
     
     return False  # Nhóm không có nhân viên nội bộ, bot sẽ phản hồi
 
-# Sử dụng hàm check_internal_users_in_group trong hàm handle_message
-async def handle_message(update: Update, context: CallbackContext):
-    msg = update.message
-    logger.info(f"🧩 Nhận từ user: {msg.from_user.full_name} - ID: {msg.from_user.id}")
-
-    # Kiểm tra xem có phải là tin nhắn từ nhân viên nội bộ không
-    if msg.from_user.id in INTERNAL_USERS_ID:
-        logger.info(f"⏩ Bỏ qua tin nhắn từ nhân viên nội bộ: {msg.from_user.full_name} - ID: {msg.from_user.id}")
-        return
-    
-    # Kiểm tra nhóm xem có nhân viên nội bộ không trước khi phản hồi
-    chat_id = update.effective_chat.id
-    if await check_internal_users_in_group(chat_id, context):  # Đảm bảo truyền context vào
-        logger.info(f"Nhóm {chat_id} có nhân viên nội bộ. Bot không phản hồi khách hàng.")
-        return  # Nếu có nhân viên trong nhóm, bot không phản hồi khách hàng
-
-    # Tiếp tục xử lý các tin nhắn bình thường từ khách hàng
-    if not msg or msg.from_user.is_bot:
-        return
-
-    # Phần còn lại xử lý các tin nhắn của khách hàng
-    await send_confirmation(update)
-    user_states[msg.from_user.id] = "active"
-
 # ========== LOGGING ==========
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -104,6 +76,7 @@ def check_office_hours() -> bool:
             return True
     return False
 
+# Kiểm tra nếu nhóm có hoạt động
 def is_group_active(group_id: int) -> bool:
     records = get_cached_group_data()
     for row in records:
@@ -115,6 +88,7 @@ def is_group_registered(group_id: int) -> bool:
     records = get_cached_group_data()
     return any(str(row["group_id"]) == str(group_id) for row in records)
 
+# Welcome new member
 async def welcome_new_member(update: Update, context: CallbackContext):
     chat = update.effective_chat
     group_id = chat.id
@@ -141,13 +115,19 @@ async def welcome_new_member(update: Update, context: CallbackContext):
         )
         await update.message.reply_text(message)
 
+# Hàm xử lý tin nhắn từ khách hàng
 async def handle_message(update: Update, context: CallbackContext):
     msg = update.message
     logger.info(f"🧩 Nhận từ user: {msg.from_user.full_name} - ID: {msg.from_user.id}")
     
-    # Kiểm tra sự có mặt của nhân viên trong nhóm trước khi phản hồi
+    # Kiểm tra xem có phải là tin nhắn từ nhân viên nội bộ không
+    if msg.from_user.id in INTERNAL_USERS_ID:
+        logger.info(f"⏩ Bỏ qua tin nhắn từ nhân viên nội bộ: {msg.from_user.full_name} - ID: {msg.from_user.id}")
+        return
+    
+    # Kiểm tra nhóm xem có nhân viên nội bộ không trước khi phản hồi
     chat_id = update.effective_chat.id
-    if await check_internal_users_in_group(chat_id):
+    if await check_internal_users_in_group(chat_id, context):  # Đảm bảo truyền context vào
         logger.info(f"Nhóm {chat_id} có nhân viên nội bộ. Bot không phản hồi khách hàng.")
         return  # Nếu có nhân viên trong nhóm, bot không phản hồi khách hàng
 
