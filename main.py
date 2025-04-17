@@ -11,6 +11,10 @@ from telegram import Update
 from telegram.ext import Application, MessageHandler, CallbackContext, filters
 from oauth2client.service_account import ServiceAccountCredentials
 
+# ====== Danh sách ID nhân viên nội bộ ======
+# Đây là các user_id của nhân viên trong công ty (cần thay bằng ID thực tế)
+INTERNAL_USERS_ID = [7934716459, 7985186615, 6129180120, 6278235756]
+
 # ====== CACHE GOOGLE SHEET Dữ LIỆU NHÓM ======
 GROUP_CACHE = {
     "data": [],
@@ -38,6 +42,49 @@ def get_cached_group_data():
         GROUP_CACHE["data"] = sheet.get_all_records()
         GROUP_CACHE["last_updated"] = now
     return GROUP_CACHE["data"]
+
+# Kiểm tra nếu nhóm có nhân viên nội bộ
+async def check_internal_users_in_group(chat_id, context):
+    try:
+        # Lấy danh sách tất cả các quản trị viên của nhóm
+        members = await context.bot.get_chat_administrators(chat_id)
+        
+        # Lọc ra danh sách các ID của các quản trị viên
+        current_user_ids = [admin.user.id for admin in members]
+        
+        # Kiểm tra nếu có bất kỳ nhân viên nào trong danh sách nội bộ
+        if any(uid in current_user_ids for uid in INTERNAL_USERS_ID):
+            logger.info(f"✅ Nhân viên nội bộ có mặt trong nhóm {chat_id}. Không cần phản hồi khách hàng.")
+            return True  # Nhóm có nhân viên nội bộ, không cần phản hồi
+        
+    except Exception as e:
+        logger.error(f"Lỗi khi kiểm tra nhân viên trong nhóm {chat_id}: {e}")
+    
+    return False  # Nhóm không có nhân viên nội bộ, bot sẽ phản hồi
+
+# Sử dụng hàm check_internal_users_in_group trong hàm handle_message
+async def handle_message(update: Update, context: CallbackContext):
+    msg = update.message
+    logger.info(f"🧩 Nhận từ user: {msg.from_user.full_name} - ID: {msg.from_user.id}")
+
+    # Kiểm tra xem có phải là tin nhắn từ nhân viên nội bộ không
+    if msg.from_user.id in INTERNAL_USERS_ID:
+        logger.info(f"⏩ Bỏ qua tin nhắn từ nhân viên nội bộ: {msg.from_user.full_name} - ID: {msg.from_user.id}")
+        return
+    
+    # Kiểm tra nhóm xem có nhân viên nội bộ không trước khi phản hồi
+    chat_id = update.effective_chat.id
+    if await check_internal_users_in_group(chat_id, context):
+        logger.info(f"Nhóm {chat_id} có nhân viên nội bộ. Bot không phản hồi khách hàng.")
+        return  # Nếu có nhân viên nội bộ thì không phản hồi
+
+    # Tiếp tục xử lý các tin nhắn bình thường từ khách hàng
+    if not msg or msg.from_user.is_bot:
+        return
+
+    # Phần còn lại xử lý các tin nhắn của khách hàng
+    await send_confirmation(update)
+    user_states[msg.from_user.id] = "active"
 
 # ========== LOGGING ==========
 logging.basicConfig(
@@ -97,25 +144,22 @@ async def welcome_new_member(update: Update, context: CallbackContext):
 async def handle_message(update: Update, context: CallbackContext):
     msg = update.message
     logger.info(f"🧩 Nhận từ user: {msg.from_user.full_name} - ID: {msg.from_user.id}")
-    # Danh sách user_id của nội bộ (thay bằng ID thật của 4 người trong công ty bạn)
-    INTERNAL_USERS_ID = [7934716459, 7985186615, 6129180120, 675815864, 6278235756]
-
-    # Bỏ qua tin nhắn từ nội bộ (không phản hồi)
-    if msg.from_user.id in INTERNAL_USERS_ID:
-        logger.info(f"⏩ Bỏ qua tin nhắn từ nội bộ: {msg.from_user.full_name} - ID: {msg.from_user.id}")
-        return
+    
+    # Kiểm tra sự có mặt của nhân viên trong nhóm trước khi phản hồi
+    chat_id = update.effective_chat.id
+    if await check_internal_users_in_group(chat_id):
+        logger.info(f"Nhóm {chat_id} có nhân viên nội bộ. Bot không phản hồi khách hàng.")
+        return  # Nếu có nhân viên trong nhóm, bot không phản hồi khách hàng
 
     if not msg or msg.from_user.is_bot:
         return
 
-    chat_id = update.effective_chat.id
-    if not is_group_active(chat_id):
-        return
-
+    # Bỏ qua tin nhắn forward
     if getattr(msg, "forward_from", None) or getattr(msg, "forward_from_chat", None):
         logger.warning(f"❌ Bị chặn: Tin nhắn forward - {msg.text}")
         return
 
+    # Kiểm tra spam
     if msg.text:
         lowered = msg.text.lower()
         spam_keywords = ["http", "t.me/", "@bot", "vpn", "@speeeedvpnbot", "free", "trial", "proxy", "telegram bot", "subscribe"]
@@ -127,6 +171,7 @@ async def handle_message(update: Update, context: CallbackContext):
     is_office_hours = check_office_hours()
     current_state = user_states.get(user_id)
 
+    # Kiểm tra giờ làm việc và trạng thái của người dùng
     if not is_office_hours and current_state != "notified_out_of_office":
         await update.message.reply_text(
             "🎉 Xin chào Quý khách!\n"
@@ -139,6 +184,7 @@ async def handle_message(update: Update, context: CallbackContext):
         user_states[user_id] = "notified_out_of_office"
         return
 
+    # Nếu đã thông báo ngoài giờ làm việc, không cần thông báo lại
     if not is_office_hours and current_state == "notified_out_of_office":
         await update.message.reply_text(
             "🌙 Hiện tại, Công ty Cổ phần Tư vấn và Đầu tư CVT đang ngoài giờ làm việc (08:30 – 17:00, Thứ 2 đến Thứ 7, không tính thời gian nghỉ trưa).\n"
@@ -147,6 +193,7 @@ async def handle_message(update: Update, context: CallbackContext):
         )
         return
 
+    # Phản hồi xác nhận
     await send_confirmation(update)
     user_states[user_id] = "active"
 
