@@ -50,7 +50,7 @@ async def check_internal_users_in_group(chat_id, context):
         
         # Kiểm tra nếu có bất kỳ nhân viên nào trong danh sách nội bộ
         if any(uid in current_user_ids for uid in INTERNAL_USERS_ID):
-            logger.info(f"✅ Nhân viên nội bộ có mặt trong nhóm {chat_id}. Không cần phản hồi khách hàng.")
+            logger.info(f"✅ Nhân viên nội bộ {name} (ID: {uid}) có mặt trong nhóm {chat_id}. Không cần phản hồi khách hàng.")
             return True  # Nhóm có nhân viên nội bộ, không cần phản hồi
         
     except Exception as e:
