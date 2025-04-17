@@ -12,7 +12,7 @@ from telegram.ext import Application, MessageHandler, CallbackContext, filters
 from oauth2client.service_account import ServiceAccountCredentials
 
 # ====== Danh sách ID nhân viên nội bộ ======
-INTERNAL_USERS_ID = [7934716459, 7985186615, 6129180120, 6278235756]
+INTERNAL_USERS_ID = [7934716459, 7985186615, 6129180120, 6278235756, 675815864]
 
 # ====== CACHE GOOGLE SHEET Dữ LIỆU NHÓM ======
 GROUP_CACHE = {"data": [], "last_updated": 0}
@@ -39,19 +39,21 @@ def get_cached_group_data():
         GROUP_CACHE["last_updated"] = now
     return GROUP_CACHE["data"]
 
-# Kiểm tra nếu nhóm có nhân viên nội bộ
+# Kiểm tra sự có mặt của nhân viên trong nhóm
 async def check_internal_users_in_group(chat_id, context):
     try:
         # Lấy danh sách tất cả các quản trị viên của nhóm
         members = await context.bot.get_chat_administrators(chat_id)
         
-        # Lọc ra danh sách các ID của các quản trị viên
+        # Lọc ra danh sách các ID và tên của các quản trị viên
         current_user_ids = [admin.user.id for admin in members]
-        
+        current_user_names = [admin.user.full_name for admin in members]
+
         # Kiểm tra nếu có bất kỳ nhân viên nào trong danh sách nội bộ
-        if any(uid in current_user_ids for uid in INTERNAL_USERS_ID):
-            logger.info(f"✅ Nhân viên nội bộ {name} (ID: {uid}) có mặt trong nhóm {chat_id}. Không cần phản hồi khách hàng.")
-            return True  # Nhóm có nhân viên nội bộ, không cần phản hồi
+        for uid, name in zip(current_user_ids, current_user_names):
+            if uid in INTERNAL_USERS_ID:
+                logger.info(f"✅ Nhân viên nội bộ {name} (ID: {uid}) có mặt trong nhóm {chat_id}. Không cần phản hồi khách hàng.")
+                return True  # Nhóm có nhân viên nội bộ, không cần phản hồi
         
     except Exception as e:
         logger.error(f"Lỗi khi kiểm tra nhân viên trong nhóm {chat_id}: {e}")
