@@ -10,6 +10,7 @@ from threading import Thread
 from telegram import Update
 from telegram.ext import Application, MessageHandler, CallbackContext, filters
 from oauth2client.service_account import ServiceAccountCredentials
+import asyncio
 
 # ====== Danh sách ID nhân viên nội bộ ======
 INTERNAL_USERS_ID = [7934716459, 7985186615, 6129180120, 6278235756]
@@ -40,7 +41,6 @@ def get_cached_group_data():
     return GROUP_CACHE["data"]
 
 # Kiểm tra sự có mặt của nhân viên trong nhóm
-# Hàm kiểm tra sự có mặt của nhân viên trong nhóm (liên tục kiểm tra nhóm khi có tin nhắn)
 async def check_internal_users_in_group(chat_id, context):
     try:
         # Lấy danh sách tất cả các quản trị viên của nhóm
@@ -60,7 +60,8 @@ async def check_internal_users_in_group(chat_id, context):
         logger.error(f"Lỗi khi kiểm tra nhân viên trong nhóm {chat_id}: {e}")
     
     return False  # Nhóm không có nhân viên nội bộ, bot sẽ phản hồi
-# ========== LOGGING ==========
+
+# ====== LOGGING ======
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO,
@@ -129,7 +130,7 @@ async def handle_message(update: Update, context: CallbackContext):
     
     # Kiểm tra nhóm xem có nhân viên nội bộ không trước khi phản hồi
     chat_id = update.effective_chat.id
-    if await check_internal_users_in_group(chat_id, context):  # Đảm bảo truyền context vào để kiểm tra lại nhóm
+    if await check_internal_users_in_group(chat_id, context):  # Đảm bảo truyền context vào
         logger.info(f"Nhóm {chat_id} có nhân viên nội bộ. Bot không phản hồi khách hàng.")
         return  # Nếu có nhân viên trong nhóm, bot không phản hồi khách hàng
 
