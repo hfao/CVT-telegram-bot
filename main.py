@@ -44,10 +44,15 @@ async def check_internal_users_in_group(chat_id, context):
     try:
         # Lấy danh sách tất cả các quản trị viên của nhóm
         members = await context.bot.get_chat_administrators(chat_id)
-        
+
         # Lọc ra danh sách các ID và tên của các quản trị viên
         current_user_ids = [admin.user.id for admin in members]
         current_user_names = [admin.user.full_name for admin in members]
+        
+        # Log chi tiết ID và tên của các quản trị viên hiện tại
+        logger.info(f"Nhóm {chat_id} có các quản trị viên sau:")
+        for uid, name in zip(current_user_ids, current_user_names):
+            logger.info(f" - ID: {uid}, Tên: {name}")
 
         # Kiểm tra nếu có bất kỳ nhân viên nào trong danh sách nội bộ
         for uid, name in zip(current_user_ids, current_user_names):
@@ -119,9 +124,9 @@ async def welcome_new_member(update: Update, context: CallbackContext):
 
 # Hàm xử lý tin nhắn từ khách hàng
 async def handle_message(update: Update, context: CallbackContext):
-    msg = update.message
+     msg = update.message
     logger.info(f"🧩 Nhận từ user: {msg.from_user.full_name} - ID: {msg.from_user.id}")
-    
+
     # Kiểm tra xem có phải là tin nhắn từ nhân viên nội bộ không
     if msg.from_user.id in INTERNAL_USERS_ID:
         logger.info(f"⏩ Bỏ qua tin nhắn từ nhân viên nội bộ: {msg.from_user.full_name} - ID: {msg.from_user.id}")
