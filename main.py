@@ -8,7 +8,7 @@ from time import time
 from flask import Flask
 from threading import Thread
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, MessageHandler, CallbackContext, CallbackQueryHandler, filters
+from telegram.ext import Application, MessageHandler, CallbackContext, filters, CommandHandler, CallbackQueryHandler
 from oauth2client.service_account import ServiceAccountCredentials
 
 # ====== Danh sách ID nhân viên nội bộ ======
@@ -42,23 +42,16 @@ def get_cached_group_data():
 # Kiểm tra sự có mặt của nhân viên trong nhóm
 async def check_internal_users_in_group(chat_id, context):
     try:
-        # Lấy danh sách tất cả các quản trị viên của nhóm
         members = await context.bot.get_chat_administrators(chat_id)
-        
-        # Lọc ra danh sách các ID và tên của các quản trị viên
         current_user_ids = [admin.user.id for admin in members]
-        current_user_names = [admin.user.full_name for admin in members]
 
-        # Kiểm tra nếu có bất kỳ nhân viên nào trong danh sách nội bộ
-        for uid, name in zip(current_user_ids, current_user_names):
+        for uid in current_user_ids:
             if uid in INTERNAL_USERS_ID:
-                logger.info(f"✅ Nhân viên nội bộ {name} (ID: {uid}) có mặt trong nhóm {chat_id}. Không cần phản hồi khách hàng.")
-                return True  # Nhóm có nhân viên nội bộ, không cần phản hồi
-        
+                logger.info(f"✅ Nhân viên nội bộ (ID: {uid}) có mặt trong nhóm {chat_id}. Không cần phản hồi khách hàng.")
+                return True
     except Exception as e:
         logger.error(f"Lỗi khi kiểm tra nhân viên trong nhóm {chat_id}: {e}")
-    
-    return False  # Nhóm không có nhân viên nội bộ, bot sẽ phản hồi
+    return False
 
 # ========== LOGGING ==========
 logging.basicConfig(
@@ -96,74 +89,41 @@ def is_group_registered(group_id: int) -> bool:
     records = get_cached_group_data()
     return any(str(row["group_id"]) == str(group_id) for row in records)
 
-# Hàm xử lý tin nhắn từ khách hàng
+# ====== Xử lý tin nhắn từ khách hàng ======
 async def handle_message(update: Update, context: CallbackContext):
     msg = update.message
     chat_id = update.effective_chat.id
     logger.info(f"🧩 Nhận từ user: {msg.from_user.full_name} - ID: {msg.from_user.id}")
     
-    # Kiểm tra xem có phải là tin nhắn từ nhân viên nội bộ không
     if msg.from_user.id in INTERNAL_USERS_ID:
         logger.info(f"⏩ Bỏ qua tin nhắn từ nhân viên nội bộ: {msg.from_user.full_name} - ID: {msg.from_user.id}")
         return
     
-    # Kiểm tra nhóm xem có nhân viên nội bộ không trước khi phản hồi
     if await check_internal_users_in_group(chat_id, context):
         logger.info(f"Nhóm {chat_id} có nhân viên nội bộ. Bot không phản hồi khách hàng.")
         return  # Nếu có nhân viên trong nhóm, bot không phản hồi khách hàng
 
-    # Cập nhật thời gian nhận tin nhắn của khách hàng
-    conversation_last_message_time[chat_id] = time.time()
+    # Gửi nút "Start" cho khách hàng khi họ gửi tin nhắn
+    keyboard = [
+        [InlineKeyboardButton("Start", callback_data="start_conversation")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await update.message.reply_text("Chào bạn! Nhấn nút 'Start' để bắt đầu trò chuyện", reply_markup=reply_markup)
 
-    # Bỏ qua tin nhắn forward
-    if getattr(msg, "forward_from", None) or getattr(msg, "forward_from_chat", None):
-        logger.warning(f"❌ Bị chặn: Tin nhắn forward - {msg.text}")
+# ====== Xử lý callback khi nhấn nút Start ======
+async def start_conversation(update: Update, context: CallbackContext):
+    query = update.callback_query
+    user_id = query.from_user.id
+    chat_id = query.message.chat.id
+
+    # Đảm bảo chỉ có nhân viên mới nhận được tin nhắn sau khi nhấn Start
+    if user_id not in INTERNAL_USERS_ID:
+        await query.answer("Chỉ nhân viên mới có thể nhận và trả lời tin nhắn.")
         return
 
-    # Kiểm tra spam
-    if msg.text:
-        lowered = msg.text.lower()
-        spam_keywords = ["http", "t.me/", "@bot", "vpn", "@speeeedvpnbot", "free", "trial", "proxy", "telegram bot", "subscribe"]
-        if any(keyword in lowered for keyword in spam_keywords):
-            logger.warning(f"❌ Bị chặn: Tin nhắn spam - {msg.text}")
-            return
-
-    user_id = update.message.from_user.id
-    is_office_hours = check_office_hours()
-    current_state = user_states.get(user_id)
-
-    # Kiểm tra giờ làm việc và trạng thái của người dùng
-    if not is_office_hours and current_state != "notified_out_of_office":
-        await update.message.reply_text(
-            "🎉 Xin chào Quý khách!\n"
-            "Cảm ơn Quý khách đã liên hệ với Công ty Cổ phần Tư vấn và Đầu tư CVT.\n"
-            "Chúng tôi sẽ phản hồi trong thời gian sớm nhất.\n\n"
-            "🕒 Giờ làm việc: 08:30 – 17:00 (Thứ 2 đến Thứ 7, không tính thời gian nghỉ trưa).\n"
-            "🗓  Chủ nhật & Ngày lễ: Nghỉ.\n"
-            "Ngoài giờ làm việc, Quý khách vui lòng để lại tin nhắn – chúng tôi sẽ phản hồi ngay khi làm việc sớm nhất."
-        )
-        user_states[user_id] = "notified_out_of_office"
-        return
-
-    # Nếu đã thông báo ngoài giờ làm việc, không cần thông báo lại
-    if not is_office_hours and current_state == "notified_out_of_office":
-        await update.message.reply_text(
-            "🌙 Hiện tại, Công ty Cổ phần Tư vấn và Đầu tư CVT đang ngoài giờ làm việc (08:30 – 17:00, Thứ 2 đến Thứ 7, không tính thời gian nghỉ trưa).\n"
-            "Quý khách vui lòng để lại tin nhắn – chúng tôi sẽ liên hệ lại trong thời gian làm việc sớm nhất.\n"
-            "Trân trọng cảm ơn!"
-        )
-        return
-
-    # Kiểm tra xem có thời gian chờ quá lâu hay không
-    current_time = time.time()
-    if current_time - conversation_last_message_time.get(chat_id, 0) > MAX_IDLE_TIME:
-        await update.message.reply_text("Cuộc trò chuyện này đã kết thúc do không có phản hồi trong 30 phút.")
-        conversation_last_message_time[chat_id] = "closed"
-        return
-
-    # Phản hồi xác nhận
-    await send_confirmation(update)
+    # Đánh dấu trạng thái cuộc trò chuyện của khách hàng
     user_states[user_id] = "active"
+    await query.message.reply_text(f"Nhân viên {query.from_user.full_name} đã bắt đầu phản hồi! Cuộc trò chuyện đã được chuyển cho nhân viên.")
 
 # Phản hồi xác nhận nhận được thông tin
 async def send_confirmation(update: Update):
@@ -186,9 +146,11 @@ async def send_confirmation(update: Update):
     follow_up = ("\nBộ phận Dịch vụ khách hàng sẽ phản hồi trong thời gian sớm nhất.\nCảm ơn Quý khách!")
     await msg.reply_text(text + follow_up)
 
+# Xử lý lỗi
 async def error(update: Update, context: CallbackContext) -> None:
     logger.warning(f'Update {update} caused error {context.error}')
 
+# Flask server để giữ bot sống
 app = Flask('')
 
 @app.route('/')
@@ -201,6 +163,7 @@ def run_web():
 def keep_alive():
     Thread(target=run_web).start()
 
+# Main function
 def main():
     token = os.environ.get("BOT_TOKEN")
     application = Application.builder().token(token).build()
@@ -211,10 +174,10 @@ def main():
         handle_message
     ))
 
+    application.add_handler(CallbackQueryHandler(start_conversation, pattern="start_conversation"))
     application.add_error_handler(error)
     keep_alive()
 
-    # ✅ Chắc chắn không xử lý tin nhắn cũ khi bot restart
     application.run_polling(drop_pending_updates=True)
 
 if __name__ == '__main__':
