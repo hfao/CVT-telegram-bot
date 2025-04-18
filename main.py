@@ -71,34 +71,6 @@ def is_group_registered(group_id: int) -> bool:
     records = get_cached_group_data()
     return any(str(row["group_id"]) == str(group_id) for row in records)
 
-# Welcome new member - thêm lại hàm welcome_new_member
-async def welcome_new_member(update: Update, context: CallbackContext):
-    chat = update.effective_chat
-    group_id = chat.id
-    group_name = chat.title or "N/A"
-
-    if not is_group_registered(group_id):
-        await update.message.reply_text(
-            f"🚨 BOT được thêm vào nhóm chưa đăng ký!\nID: `{group_id}`\nTên nhóm: {group_name}",
-            parse_mode="Markdown"
-        )
-        return
-
-    if not is_group_active(group_id):
-        return
-
-    for member in update.message.new_chat_members:
-        if member.id == context.bot.id:
-            return
-
-        message = (
-            "🎉 Xin chào Quý khách.\n"
-            "Cảm ơn Quý khách đã tin tưởng sử dụng dịch vụ của CVT.\n"
-            "Nếu Quý khách cần hỗ trợ hoặc có bất kỳ vấn đề nào cần trao đổi, "
-            "vui lòng để lại tin nhắn tại đây. Đội ngũ tư vấn sẽ theo dõi và phản hồi Quý khách trong thời gian sớm nhất có thể ạ."
-        )
-        await update.message.reply_text(message)
-
 # ====== Xử lý tin nhắn từ khách hàng ======
 async def handle_message(update: Update, context: CallbackContext):
     msg = update.message
