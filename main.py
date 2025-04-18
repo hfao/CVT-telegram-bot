@@ -13,7 +13,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 import asyncio
 
 # ====== Danh sách ID nhân viên nội bộ ======
-INTERNAL_USERS_ID = [7934716459, 7985186615, 6129180120, 6278235756, 675815864]
+INTERNAL_USERS_ID = [7934716459, 7985186615, 6129180120, 6278235756]
 
 # ====== CACHE GOOGLE SHEET Dữ LIỆU NHÓM ======
 GROUP_CACHE = {"data": [], "last_updated": 0}
