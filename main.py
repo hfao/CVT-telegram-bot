@@ -10,7 +10,6 @@ from threading import Thread
 from telegram import Update
 from telegram.ext import Application, MessageHandler, CallbackContext, filters
 from oauth2client.service_account import ServiceAccountCredentials
-import asyncio
 
 # ====== Danh sách ID nhân viên nội bộ ======
 INTERNAL_USERS_ID = [7934716459, 7985186615, 6129180120, 6278235756]
@@ -61,7 +60,7 @@ async def check_internal_users_in_group(chat_id, context):
     
     return False  # Nhóm không có nhân viên nội bộ, bot sẽ phản hồi
 
-# ====== LOGGING ======
+# ========== LOGGING ==========
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO,
@@ -70,6 +69,12 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 user_states = {}
+
+# Lưu thời gian cuối cùng nhận tin nhắn từ mỗi người dùng
+conversation_last_message_time = {}
+
+# Đặt thời gian chờ tối đa (30 phút = 1800 giây)
+MAX_IDLE_TIME = 1800  # 30 minutes
 
 def check_office_hours() -> bool:
     tz = pytz.timezone('Asia/Ho_Chi_Minh')
@@ -121,6 +126,7 @@ async def welcome_new_member(update: Update, context: CallbackContext):
 # Hàm xử lý tin nhắn từ khách hàng
 async def handle_message(update: Update, context: CallbackContext):
     msg = update.message
+    chat_id = update.effective_chat.id
     logger.info(f"🧩 Nhận từ user: {msg.from_user.full_name} - ID: {msg.from_user.id}")
     
     # Kiểm tra xem có phải là tin nhắn từ nhân viên nội bộ không
@@ -129,13 +135,12 @@ async def handle_message(update: Update, context: CallbackContext):
         return
     
     # Kiểm tra nhóm xem có nhân viên nội bộ không trước khi phản hồi
-    chat_id = update.effective_chat.id
-    if await check_internal_users_in_group(chat_id, context):  # Đảm bảo truyền context vào
+    if await check_internal_users_in_group(chat_id, context):
         logger.info(f"Nhóm {chat_id} có nhân viên nội bộ. Bot không phản hồi khách hàng.")
         return  # Nếu có nhân viên trong nhóm, bot không phản hồi khách hàng
 
-    if not msg or msg.from_user.is_bot:
-        return
+    # Cập nhật thời gian nhận tin nhắn của khách hàng
+    conversation_last_message_time[chat_id] = time.time()
 
     # Bỏ qua tin nhắn forward
     if getattr(msg, "forward_from", None) or getattr(msg, "forward_from_chat", None):
@@ -176,10 +181,18 @@ async def handle_message(update: Update, context: CallbackContext):
         )
         return
 
+    # Kiểm tra xem có thời gian chờ quá lâu hay không
+    current_time = time.time()
+    if current_time - conversation_last_message_time.get(chat_id, 0) > MAX_IDLE_TIME:
+        await update.message.reply_text("Cuộc trò chuyện này đã kết thúc do không có phản hồi trong 30 phút.")
+        conversation_states[chat_id] = "closed"
+        return
+
     # Phản hồi xác nhận
     await send_confirmation(update)
     user_states[user_id] = "active"
 
+# Phản hồi xác nhận nhận được thông tin
 async def send_confirmation(update: Update):
     msg = update.message
     text = ""
