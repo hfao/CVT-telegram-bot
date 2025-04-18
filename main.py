@@ -39,7 +39,7 @@ def get_cached_group_data():
         GROUP_CACHE["last_updated"] = now
     return GROUP_CACHE["data"]
 
-# ====== LOGGING ======
+# ========== LOGGING ==========
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -59,7 +59,6 @@ def check_office_hours() -> bool:
             return True
     return False
 
-# Kiểm tra nếu nhóm có hoạt động
 def is_group_active(group_id: int) -> bool:
     records = get_cached_group_data()
     for row in records:
@@ -82,6 +81,7 @@ async def handle_message(update: Update, context: CallbackContext):
     if not is_group_active(chat_id):
         return
 
+    # Kiểm tra xem tin nhắn có phải tin nhắn forward không và bỏ qua nếu là tin nhắn từ bot khác
     if hasattr(msg, "forward_from") and msg.forward_from and msg.forward_from.is_bot:
         return
     if hasattr(msg, "forward_from_chat") and msg.forward_from_chat:
@@ -96,7 +96,7 @@ async def handle_message(update: Update, context: CallbackContext):
     is_office_hours = check_office_hours()
     current_state = user_states.get(user_id)
 
-    # Mẫu 1: Tin nhắn chào khách khi vừa nhắn đến
+    # Mẫu 1: Tin nhắn lần đầu khi khách nhắn đến hoặc mới vào nhóm
     if not is_office_hours:
         # Mẫu 2: Tin nhắn ngoài giờ làm việc
         await update.message.reply_text(
@@ -109,14 +109,11 @@ async def handle_message(update: Update, context: CallbackContext):
         )
         return
 
-    # Mẫu 1: Tin nhắn chào khách khi vừa nhắn đến
+    # Mẫu 1: Tin nhắn chào khách khi vừa nhắn đến (trong giờ làm việc)
     await update.message.reply_text(
-        "🎉 Xin chào Quý khách!\n"
-        "Cảm ơn Quý khách đã liên hệ với Công ty Cổ phần Tư vấn và Đầu tư CVT.\n"
-        "Chúng tôi sẽ phản hồi trong thời gian sớm nhất.\n\n"
-        "🕒 Giờ làm việc: 08:30 – 17:00 (Thứ 2 đến Thứ 7, không tính thời gian nghỉ trưa)\n"
-        "📅 Chủ nhật & Ngày lễ: Nghỉ\n"
-        "Ngoài giờ làm việc, Quý khách vui lòng để lại tin nhắn – chúng tôi sẽ phản hồi ngay khi làm việc sớm nhất."
+        "🎉 Xin chào Quý khách.\n"
+        "Cảm ơn Quý khách đã tin tưởng sử dụng dịch vụ của CVT.\n"
+        "Nếu Quý khách cần hỗ trợ hoặc có bất kỳ vấn đề nào cần trao đổi, vui lòng để lại tin nhắn tại đây. Đội ngũ tư vấn sẽ theo dõi và phản hồi Quý khách trong thời gian sớm nhất có thể ạ."
     )
 
     # Gửi nút "Start" cho khách hàng khi họ gửi tin nhắn
@@ -125,6 +122,23 @@ async def handle_message(update: Update, context: CallbackContext):
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     await update.message.reply_text("Chào bạn! Nhấn nút 'Start' để bắt đầu trò chuyện", reply_markup=reply_markup)
+
+    # Lưu trạng thái người dùng nếu có
+    user_states[update.message.from_user.id] = "waiting_for_response"
+
+# ====== Mẫu 3: Nếu khách vẫn nhắn tiếp sau khi nhận mẫu 2 ======
+async def handle_off_hours_continuation(update: Update, context: CallbackContext):
+    msg = update.message
+
+    if not msg or msg.from_user.is_bot:
+        return
+
+    # Mẫu 3: Khi khách nhắn tiếp sau khi đã nhận mẫu 2 (Ngoài giờ làm việc)
+    await update.message.reply_text(
+        "🌙 Hiện tại, Công ty Cổ phần Tư vấn và Đầu tư CVT đang ngoài giờ làm việc (08:30 – 17:00, Thứ 2 đến Thứ 7, không tính thời gian nghỉ trưa).\n"
+        "Quý khách vui lòng để lại tin nhắn – chúng tôi sẽ liên hệ lại trong thời gian làm việc sớm nhất.\n"
+        "Trân trọng cảm ơn!"
+    )
 
 # ====== Xử lý callback khi nhấn nút Start ======
 async def start_conversation(update: Update, context: CallbackContext):
@@ -155,10 +169,10 @@ async def send_confirmation(update: Update):
         text = f"✅ CVT đã nhận được tài liệu.\n📄 Tên file: {msg.document.file_name}"
     elif msg.video:
         duration = str(datetime.timedelta(seconds=msg.video.duration))
-        text = f"✅ CVT đã nhận được video.\n⏱ Thời lượng: {duration}"
+        text = f"✅ CVT đã nhận được video.\n⏱ Thời gian: {duration}"
     elif msg.voice:
         duration = str(datetime.timedelta(seconds=msg.voice.duration))
-        text = f"✅ CVT đã nhận được tin nhắn thoại.\n⏱ Thời lượng: {duration}"
+        text = f"✅ CVT đã nhận được tin nhắn thoại.\n⏱ Thời gian: {duration}"
     else:
         text = "✅ CVT đã nhận được tin nhắn của quý khách."
 
