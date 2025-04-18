@@ -39,12 +39,22 @@ def get_cached_group_data():
         GROUP_CACHE["last_updated"] = now
     return GROUP_CACHE["data"]
 
+# Kiểm tra sự có mặt của nhân viên trong nhóm
+async def check_internal_users_in_group(chat_id, context):
+    try:
+        members = await context.bot.get_chat_administrators(chat_id)
+        current_user_ids = [admin.user.id for admin in members]
+
+        for uid in current_user_ids:
+            if uid in INTERNAL_USERS_ID:
+                logger.info(f"✅ Nhân viên nội bộ (ID: {uid}) có mặt trong nhóm {chat_id}. Không cần phản hồi khách hàng.")
+                return True
+    except Exception as e:
+        logger.error(f"Lỗi khi kiểm tra nhân viên trong nhóm {chat_id}: {e}")
+    return False
+
 # ========== LOGGING ==========
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO,
-    handlers=[logging.FileHandler("bot.log"), logging.StreamHandler()]
-)
+logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 user_states = {}
@@ -63,29 +73,54 @@ def check_office_hours() -> bool:
             return True
     return False
 
-# ====== Welcome new member ======
-async def welcome_new_member(update: Update, context: CallbackContext):
-    chat = update.effective_chat
-    group_id = chat.id
-    group_name = chat.title or "N/A"
-
-    message = (
-        "Xin chào Quý khách.\n"
-        "Cảm ơn Quý khách đã tin tưởng sử dụng dịch vụ của CVT.\n"
-        "Nếu Quý khách cần hỗ trợ hoặc có bất kỳ vấn đề nào cần trao đổi, vui lòng để lại tin nhắn tại đây. Đội ngũ tư vấn sẽ theo dõi và phản hồi Quý khách trong thời gian sớm nhất có thể ạ."
-    )
-    await update.message.reply_text(message)
-
 # ====== Xử lý tin nhắn từ khách hàng ======
 async def handle_message(update: Update, context: CallbackContext):
     msg = update.message
-    chat_id = update.effective_chat.id
-    logger.info(f"🧩 Nhận từ user: {msg.from_user.full_name} - ID: {msg.from_user.id}")
 
-    if msg.from_user.id in INTERNAL_USERS_ID:
-        logger.info(f"⏩ Bỏ qua tin nhắn từ nhân viên nội bộ: {msg.from_user.full_name} - ID: {msg.from_user.id}")
+    if not msg or msg.from_user.is_bot:
         return
-    
+
+    chat_id = update.effective_chat.id
+    if not is_group_active(chat_id):
+        return
+
+    if hasattr(msg, "forward_from") and msg.forward_from and msg.forward_from.is_bot:
+        return
+    if hasattr(msg, "forward_from_chat") and msg.forward_from_chat:
+        return
+
+    if msg.text:
+        lowered = msg.text.lower()
+        if any(x in lowered for x in ["http", "t.me/", "@bot", "vpn", "@speeeedvpnbot"]):
+            return
+
+    user_id = update.message.from_user.id
+    is_office_hours = check_office_hours()
+    current_state = user_states.get(user_id)
+
+    # Mẫu 1: Tin nhắn chào khách khi vừa nhắn đến
+    if not is_office_hours:
+        # Mẫu 2: Tin nhắn ngoài giờ làm việc
+        await update.message.reply_text(
+            "🎉 Xin chào Quý khách!\n"
+            "Cảm ơn Quý khách đã liên hệ với Công ty Cổ phần Tư vấn và Đầu tư CVT.\n"
+            "Chúng tôi sẽ phản hồi trong thời gian sớm nhất.\n\n"
+            "🕒 Giờ làm việc: 08:30 – 17:00 (Thứ 2 đến Thứ 7, không tính thời gian nghỉ trưa)\n"
+            "📅 Chủ nhật & Ngày lễ: Nghỉ\n"
+            "Ngoài giờ làm việc, Quý khách vui lòng để lại tin nhắn – chúng tôi sẽ phản hồi ngay khi làm việc sớm nhất."
+        )
+        return
+
+    # Mẫu 1: Tin nhắn chào khách khi vừa nhắn đến
+    await update.message.reply_text(
+        "🎉 Xin chào Quý khách!\n"
+        "Cảm ơn Quý khách đã liên hệ với Công ty Cổ phần Tư vấn và Đầu tư CVT.\n"
+        "Chúng tôi sẽ phản hồi trong thời gian sớm nhất.\n\n"
+        "🕒 Giờ làm việc: 08:30 – 17:00 (Thứ 2 đến Thứ 7, không tính thời gian nghỉ trưa)\n"
+        "📅 Chủ nhật & Ngày lễ: Nghỉ\n"
+        "Ngoài giờ làm việc, Quý khách vui lòng để lại tin nhắn – chúng tôi sẽ phản hồi ngay khi làm việc sớm nhất."
+    )
+
     # Gửi nút "Start" cho khách hàng khi họ gửi tin nhắn
     keyboard = [
         [InlineKeyboardButton("Start", callback_data="start_conversation")]
@@ -108,28 +143,34 @@ async def start_conversation(update: Update, context: CallbackContext):
     user_states[user_id] = "active"
     await query.message.reply_text(f"Nhân viên {query.from_user.full_name} đã bắt đầu phản hồi! Cuộc trò chuyện đã được chuyển cho nhân viên.")
 
-# ====== Phản hồi xác nhận nhận được thông tin ======
+    # Chuyển cuộc trò chuyện cho nhân viên
+    await send_confirmation(update)
+
+# Phản hồi xác nhận nhận được thông tin
 async def send_confirmation(update: Update):
     msg = update.message
     text = ""
 
     if msg.photo:
-        text = "✅ CVT đã nhận được hình ảnh."
+        text = "✅ CVT đã nhận được hình ảnh của quý khách."
     elif msg.document:
         text = f"✅ CVT đã nhận được tài liệu.\n📄 Tên file: {msg.document.file_name}"
     elif msg.video:
         duration = str(datetime.timedelta(seconds=msg.video.duration))
-        text = f"✅ CVT đã nhận được video.\n🎧 Thời lượng: {duration}"
+        text = f"✅ CVT đã nhận được video.\n⏱ Thời lượng: {duration}"
     elif msg.voice:
         duration = str(datetime.timedelta(seconds=msg.voice.duration))
-        text = f"✅ CVT đã nhận được tin nhắn thoại.\n🎧 Thời lượng: {duration}"
+        text = f"✅ CVT đã nhận được tin nhắn thoại.\n⏱ Thời lượng: {duration}"
     else:
-        text = "✅ CVT đã nhận được tin nhắn."
+        text = "✅ CVT đã nhận được tin nhắn của quý khách."
 
-    follow_up = ("\nBộ phận Dịch vụ khách hàng sẽ phản hồi trong thời gian sớm nhất.\nCảm ơn Quý khách!")
+    follow_up = (
+        "\nBộ phận Dịch vụ khách hàng sẽ phản hồi trong thời gian sớm nhất.\n"
+        "Cảm ơn Quý khách đã tin tưởng CVT!"
+    )
     await msg.reply_text(text + follow_up)
 
-# ====== Xử lý lỗi ======
+# Xử lý lỗi
 async def error(update: Update, context: CallbackContext) -> None:
     logger.warning(f'Update {update} caused error {context.error}')
 
@@ -146,7 +187,6 @@ def run_web():
 def keep_alive():
     Thread(target=run_web).start()
 
-# Main function
 def main():
     token = os.environ.get("BOT_TOKEN")
     application = Application.builder().token(token).build()
