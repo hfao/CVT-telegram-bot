@@ -185,7 +185,7 @@ async def handle_message(update: Update, context: CallbackContext):
     current_time = time.time()
     if current_time - conversation_last_message_time.get(chat_id, 0) > MAX_IDLE_TIME:
         await update.message.reply_text("Cuộc trò chuyện này đã kết thúc do không có phản hồi trong 30 phút.")
-        conversation_states[chat_id] = "closed"
+        conversation_last_message_time[chat_id] = "closed"
         return
 
     # Phản hồi xác nhận
