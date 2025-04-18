@@ -39,20 +39,6 @@ def get_cached_group_data():
         GROUP_CACHE["last_updated"] = now
     return GROUP_CACHE["data"]
 
-# Kiểm tra sự có mặt của nhân viên trong nhóm
-async def check_internal_users_in_group(chat_id, context):
-    try:
-        members = await context.bot.get_chat_administrators(chat_id)
-        current_user_ids = [admin.user.id for admin in members]
-
-        for uid in current_user_ids:
-            if uid in INTERNAL_USERS_ID:
-                logger.info(f"✅ Nhân viên nội bộ (ID: {uid}) có mặt trong nhóm {chat_id}. Không cần phản hồi khách hàng.")
-                return True
-    except Exception as e:
-        logger.error(f"Lỗi khi kiểm tra nhân viên trong nhóm {chat_id}: {e}")
-    return False
-
 # ========== LOGGING ==========
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -77,59 +63,29 @@ def check_office_hours() -> bool:
             return True
     return False
 
-# Kiểm tra nếu nhóm có hoạt động
-def is_group_active(group_id: int) -> bool:
-    records = get_cached_group_data()
-    for row in records:
-        if str(row["group_id"]) == str(group_id) and str(row["active"]).lower() == "true":
-            return True
-    return False
-
-def is_group_registered(group_id: int) -> bool:
-    records = get_cached_group_data()
-    return any(str(row["group_id"]) == str(group_id) for row in records)
-
 # ====== Welcome new member ======
 async def welcome_new_member(update: Update, context: CallbackContext):
     chat = update.effective_chat
     group_id = chat.id
     group_name = chat.title or "N/A"
 
-    if not is_group_registered(group_id):
-        await update.message.reply_text(
-            f"🚨 BOT được thêm vào nhóm chưa đăng ký!\nID: `{group_id}`\nTên nhóm: {group_name}",
-            parse_mode="Markdown"
-        )
-        return
-
-    if not is_group_active(group_id):
-        return
-
-    for member in update.message.new_chat_members:
-        if member.id == context.bot.id:
-            return
-
-        message = (
-            "Xin chào Quý khách.\n"
-            "Cảm ơn Quý khách đã tin tưởng sử dụng dịch vụ của CVT.\n"
-            "Nếu Quý khách cần hỗ trợ hoặc có bất kỳ vấn đề nào cần trao đổi, vui lòng để lại tin nhắn tại đây. Đội ngũ tư vấn sẽ theo dõi và phản hồi Quý khách trong thời gian sớm nhất có thể ạ."
-        )
-        await update.message.reply_text(message)
+    message = (
+        "Xin chào Quý khách.\n"
+        "Cảm ơn Quý khách đã tin tưởng sử dụng dịch vụ của CVT.\n"
+        "Nếu Quý khách cần hỗ trợ hoặc có bất kỳ vấn đề nào cần trao đổi, vui lòng để lại tin nhắn tại đây. Đội ngũ tư vấn sẽ theo dõi và phản hồi Quý khách trong thời gian sớm nhất có thể ạ."
+    )
+    await update.message.reply_text(message)
 
 # ====== Xử lý tin nhắn từ khách hàng ======
 async def handle_message(update: Update, context: CallbackContext):
     msg = update.message
     chat_id = update.effective_chat.id
     logger.info(f"🧩 Nhận từ user: {msg.from_user.full_name} - ID: {msg.from_user.id}")
-    
+
     if msg.from_user.id in INTERNAL_USERS_ID:
         logger.info(f"⏩ Bỏ qua tin nhắn từ nhân viên nội bộ: {msg.from_user.full_name} - ID: {msg.from_user.id}")
         return
     
-    if await check_internal_users_in_group(chat_id, context):
-        logger.info(f"Nhóm {chat_id} có nhân viên nội bộ. Bot không phản hồi khách hàng.")
-        return  # Nếu có nhân viên trong nhóm, bot không phản hồi khách hàng
-
     # Gửi nút "Start" cho khách hàng khi họ gửi tin nhắn
     keyboard = [
         [InlineKeyboardButton("Start", callback_data="start_conversation")]
@@ -152,7 +108,7 @@ async def start_conversation(update: Update, context: CallbackContext):
     user_states[user_id] = "active"
     await query.message.reply_text(f"Nhân viên {query.from_user.full_name} đã bắt đầu phản hồi! Cuộc trò chuyện đã được chuyển cho nhân viên.")
 
-# Phản hồi xác nhận nhận được thông tin
+# ====== Phản hồi xác nhận nhận được thông tin ======
 async def send_confirmation(update: Update):
     msg = update.message
     text = ""
@@ -173,7 +129,7 @@ async def send_confirmation(update: Update):
     follow_up = ("\nBộ phận Dịch vụ khách hàng sẽ phản hồi trong thời gian sớm nhất.\nCảm ơn Quý khách!")
     await msg.reply_text(text + follow_up)
 
-# Xử lý lỗi
+# ====== Xử lý lỗi ======
 async def error(update: Update, context: CallbackContext) -> None:
     logger.warning(f'Update {update} caused error {context.error}')
 
