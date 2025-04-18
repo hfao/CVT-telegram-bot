@@ -19,6 +19,7 @@ GROUP_CACHE = {"data": [], "last_updated": 0}
 CACHE_TTL = 300  # giây (5 phút)
 
 # ========== CONFIG GOOGLE SHEETS ==========
+
 SHEET_ID = "1ASeRadkkokhqOflRETw6sGJTyJ65Y0XQi5mvFmivLnY"
 SHEET_NAME = "Sheet1"
 
@@ -39,7 +40,7 @@ def get_cached_group_data():
         GROUP_CACHE["last_updated"] = now
     return GROUP_CACHE["data"]
 
-# ========== LOGGING ==========
+# ====== LOGGING ======
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -70,6 +71,34 @@ def is_group_registered(group_id: int) -> bool:
     records = get_cached_group_data()
     return any(str(row["group_id"]) == str(group_id) for row in records)
 
+# ====== Welcome new member - thêm lại hàm welcome_new_member ======
+async def welcome_new_member(update: Update, context: CallbackContext):
+    chat = update.effective_chat
+    group_id = chat.id
+    group_name = chat.title or "N/A"
+
+    if not is_group_registered(group_id):
+        await update.message.reply_text(
+            f"🚨 BOT được thêm vào nhóm chưa đăng ký!\nID: `{group_id}`\nTên nhóm: {group_name}",
+            parse_mode="Markdown"
+        )
+        return
+
+    if not is_group_active(group_id):
+        return
+
+    for member in update.message.new_chat_members:
+        if member.id == context.bot.id:
+            return
+
+        message = (
+            "Xin chào Quý khách.\n"
+            "Cảm ơn Quý khách đã tin tưởng sử dụng dịch vụ của CVT.\n"
+            "Nếu Quý khách cần hỗ trợ hoặc có bất kỳ vấn đề nào cần trao đổi, "
+            "vui lòng để lại tin nhắn tại đây. Đội ngũ tư vấn sẽ theo dõi và phản hồi Quý khách trong thời gian sớm nhất có thể ạ."
+        )
+        await update.message.reply_text(message)
+
 # ====== Xử lý tin nhắn từ khách hàng ======
 async def handle_message(update: Update, context: CallbackContext):
     msg = update.message
@@ -81,7 +110,6 @@ async def handle_message(update: Update, context: CallbackContext):
     if not is_group_active(chat_id):
         return
 
-    # Kiểm tra xem tin nhắn có phải tin nhắn forward không và bỏ qua nếu là tin nhắn từ bot khác
     if hasattr(msg, "forward_from") and msg.forward_from and msg.forward_from.is_bot:
         return
     if hasattr(msg, "forward_from_chat") and msg.forward_from_chat:
@@ -96,7 +124,7 @@ async def handle_message(update: Update, context: CallbackContext):
     is_office_hours = check_office_hours()
     current_state = user_states.get(user_id)
 
-    # Mẫu 1: Tin nhắn lần đầu khi khách nhắn đến hoặc mới vào nhóm
+    # Mẫu 1: Tin nhắn lần đầu khi khách nhắn đến hoặc mới vô nhóm
     if not is_office_hours:
         # Mẫu 2: Tin nhắn ngoài giờ làm việc
         await update.message.reply_text(
@@ -109,11 +137,11 @@ async def handle_message(update: Update, context: CallbackContext):
         )
         return
 
-    # Mẫu 1: Tin nhắn chào khách khi vừa nhắn đến (trong giờ làm việc)
+    # Mẫu 1: Tin nhắn lần đầu khi khách nhắn đến hoặc mới vô nhóm
     await update.message.reply_text(
-        "🎉 Xin chào Quý khách.\n"
+        "Xin chào Quý khách.\n"
         "Cảm ơn Quý khách đã tin tưởng sử dụng dịch vụ của CVT.\n"
-        "Nếu Quý khách cần hỗ trợ hoặc có bất kỳ vấn đề nào cần trao đổi, vui lòng để lại tin nhắn tại đây. Đội ngũ tư vấn sẽ theo dõi và phản hồi Quý khách trong thời gian sớm nhất có thể ạ."
+        "Nếu Quý khách cần hỗ trợ hoặc có bất kỳ vấn đề nào cần trao đổi, vui lòng để lại tin nhắn tại đây. Đội ngũ tư vấn sẽ theo dõi và phản hồi Quý khách trong thời gian sớm nhất có thể ạ.\nn"
     )
 
     # Gửi nút "Start" cho khách hàng khi họ gửi tin nhắn
@@ -122,23 +150,6 @@ async def handle_message(update: Update, context: CallbackContext):
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     await update.message.reply_text("Chào bạn! Nhấn nút 'Start' để bắt đầu trò chuyện", reply_markup=reply_markup)
-
-    # Lưu trạng thái người dùng nếu có
-    user_states[update.message.from_user.id] = "waiting_for_response"
-
-# ====== Mẫu 3: Nếu khách vẫn nhắn tiếp sau khi nhận mẫu 2 ======
-async def handle_off_hours_continuation(update: Update, context: CallbackContext):
-    msg = update.message
-
-    if not msg or msg.from_user.is_bot:
-        return
-
-    # Mẫu 3: Khi khách nhắn tiếp sau khi đã nhận mẫu 2 (Ngoài giờ làm việc)
-    await update.message.reply_text(
-        "🌙 Hiện tại, Công ty Cổ phần Tư vấn và Đầu tư CVT đang ngoài giờ làm việc (08:30 – 17:00, Thứ 2 đến Thứ 7, không tính thời gian nghỉ trưa).\n"
-        "Quý khách vui lòng để lại tin nhắn – chúng tôi sẽ liên hệ lại trong thời gian làm việc sớm nhất.\n"
-        "Trân trọng cảm ơn!"
-    )
 
 # ====== Xử lý callback khi nhấn nút Start ======
 async def start_conversation(update: Update, context: CallbackContext):
