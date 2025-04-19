@@ -168,17 +168,21 @@ async def handle_callback(update: Update, context: CallbackContext):
 # ==== MAIN ====
 def main():
     application = Application.builder().token(BOT_TOKEN).build()
+
     application.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, welcome_new_member))
     application.add_handler(MessageHandler(filters.TEXT | filters.PHOTO | filters.Document.ALL | filters.VIDEO | filters.VOICE, handle_message))
     application.add_handler(CallbackQueryHandler(handle_callback))
 
     keep_alive()
 
-    async def run():
-        await application.bot.delete_webhook(drop_pending_updates=True)  # 🛠 Fix conflict
-        await application.run_polling()
+    # ✅ Gọi xóa webhook và chạy polling trong thread async đúng cách
+    async def start():
+        await application.bot.delete_webhook(drop_pending_updates=True)
+        await application.initialize()
+        await application.start()
+        await application.updater.start_polling()
 
-    asyncio.run(run())
-
+    asyncio.get_event_loop().create_task(start())
+    
 if __name__ == '__main__':
     main()
