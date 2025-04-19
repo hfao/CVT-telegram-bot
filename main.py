@@ -5,8 +5,8 @@ import gspread
 import os
 import json
 from time import time
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, MessageHandler, CallbackContext, filters, CallbackQueryHandler
+from telegram import Update
+from telegram.ext import Application, MessageHandler, CallbackContext, filters
 from oauth2client.service_account import ServiceAccountCredentials
 
 # ==== ENV CONFIG ====
@@ -88,6 +88,17 @@ async def handle_message(update: Update, context: CallbackContext):
     if any(keyword in text for keyword in ["http", "t.me", "@bot", "vpn"]):
         return
 
+    # Nếu đã có nhân viên xử lý thì bot ngưng phản hồi
+    if conversation_handlers.get(chat_id) and conversation_handlers[chat_id] in INTERNAL_USERS_ID:
+        return
+
+    # Nếu nhân viên gửi tin → gán làm người tiếp nhận và thông báo
+    if user_id in INTERNAL_USERS_ID:
+        conversation_handlers[chat_id] = user_id
+        await msg.reply_text(f"Nhân viên {msg.from_user.full_name} đã tiếp nhận tin nhắn. Cuộc trò chuyện sẽ được chuyển tiếp cho nhân viên phụ trách.")
+        return
+
+    # Khách hàng gửi tin nhắn:
     is_office = check_office_hours()
     time_slot = get_time_slot()
     state = user_states.get(user_id, None)
@@ -121,11 +132,6 @@ async def handle_message(update: Update, context: CallbackContext):
     if msg.document or msg.photo or msg.video or msg.voice:
         await send_file_confirmation(msg)
 
-    if conversation_handlers[chat_id] is None:
-        keyboard = [[InlineKeyboardButton("Start", callback_data=f"start_{chat_id}")]]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        await msg.reply_text("Chào bạn! Nhấn nút 'Start' để bắt đầu trò chuyện với khách hàng", reply_markup=reply_markup)
-
 # ==== FILE CONFIRMATION ====
 async def send_file_confirmation(msg):
     if msg.document:
@@ -143,34 +149,11 @@ async def send_file_confirmation(msg):
     follow_up = "\nBộ phận Dịch vụ khách hàng sẽ phản hồi trong thời gian sớm nhất.\nCảm ơn Quý khách đã tin tưởng CVT!"
     await msg.reply_text(text + follow_up)
 
-# ==== CALLBACK BUTTON ====
-# ==== CALLBACK BUTTON ====
-async def handle_callback(update: Update, context: CallbackContext):
-    query = update.callback_query
-    user_id = query.from_user.id
-    data = query.data
-
-    if not data.startswith("start_"):
-        return
-
-    # Kiểm tra người nhấn có phải là nhân viên không
-    if user_id not in INTERNAL_USERS_ID:
-        await query.answer("Chỉ nhân viên mới có thể tiếp nhận cuộc trò chuyện này.")
-        return
-
-    chat_id = int(data.split("_")[1])
-    conversation_handlers[chat_id] = user_id
-
-    await query.message.reply_text(
-        f"Nhân viên {query.from_user.full_name} đã tiếp nhận tin nhắn này. Cuộc trò chuyện sẽ được chuyển tiếp cho nhân viên phụ trách."
-    )
 # ==== RUN ====
 def run():
     application = Application.builder().token(BOT_TOKEN).build()
     application.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, welcome_new_member))
     application.add_handler(MessageHandler(filters.TEXT | filters.PHOTO | filters.Document.ALL | filters.VIDEO | filters.VOICE, handle_message))
-    application.add_handler(CallbackQueryHandler(handle_callback))
-
     print("✅ Bot is running...")
     application.run_polling()
 
