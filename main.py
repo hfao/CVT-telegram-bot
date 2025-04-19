@@ -173,9 +173,10 @@ async def main():
     token = os.environ.get("BOT_TOKEN")
     application = Application.builder().token(token).build()
     application.add_handler(MessageHandler(filters.ALL, handle_message))
-    asyncio.create_task(monitor_conversations(application))
+    asyncio.create_task(monitor_conversations(application))  # Đảm bảo tạo task bất đồng bộ
     print("✅ Bot is running...")
-    await application.run_polling()  # Gọi run_polling trực tiếp mà không dùng asyncio.run()
+    await application.run_polling()
 
+# Chạy chương trình chính trong môi trường hỗ trợ async (nếu Railway đã quản lý event loop)
 if __name__ == "__main__":
-    main()  # Gọi main() mà không cần async event loop
+    asyncio.get_event_loop().run_until_complete(main())  # Chạy trực tiếp với event loop hiện tại
