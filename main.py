@@ -1,30 +1,32 @@
+
 import logging
 import datetime
 import pytz
 import gspread
 import os
 import json
+import asyncio
 from time import time
 from telegram import Update
 from telegram.ext import Application, MessageHandler, CallbackContext, filters
 from oauth2client.service_account import ServiceAccountCredentials
 
-# ==== ENV CONFIG ====
-BOT_TOKEN = os.environ.get("BOT_TOKEN")
-GOOGLE_CREDS_JSON = os.environ.get("GOOGLE_CREDS_JSON")
+# ====== Danh sách ID nhân viên nội bộ ======
+INTERNAL_USERS_ID = [7934716459, 7985186615, 6129180120, 6278235756]
 
-if not BOT_TOKEN or not GOOGLE_CREDS_JSON:
-    raise ValueError("Missing environment variables BOT_TOKEN or GOOGLE_CREDS_JSON")
+# ====== Trạng thái cuộc trò chuyện ======
+user_states = {}
+conversation_last_message_time = {}
+conversation_handlers = {}
+MAX_IDLE_TIME = 300  # 5 phút
 
-# ==== LOGGING ====
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-# ==== GOOGLE SHEET SETUP ====
+# ========== Google Sheets ==========
 SHEET_ID = "1ASeRadkkokhqOflRETw6sGJTyJ65Y0XQi5mvFmivLnY"
 SHEET_NAME = "Sheet1"
-GROUP_CACHE = {"data": [], "last_updated": 0}
-CACHE_TTL = 300
+
+GOOGLE_CREDS_JSON = os.environ.get("GOOGLE_CREDS_JSON")
+if not GOOGLE_CREDS_JSON:
+    raise ValueError("Missing GOOGLE_CREDS_JSON")
 
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
 credentials_dict = json.loads(GOOGLE_CREDS_JSON)
@@ -32,27 +34,10 @@ credentials = ServiceAccountCredentials.from_json_keyfile_dict(credentials_dict,
 gc = gspread.authorize(credentials)
 sheet = gc.open_by_key(SHEET_ID).worksheet(SHEET_NAME)
 
-# ==== CONSTANTS ====
-INTERNAL_USERS_ID = [7934716459, 7985186615, 6129180120, 6278235756]
-user_states = {}
-conversation_last_message_time = {}
-conversation_handlers = {}
-MAX_IDLE_TIME = 300 # giảm xuống 5p
+# Cache group data
+GROUP_CACHE = {"data": [], "last_updated": 0}
+CACHE_TTL = 300
 
-# ==== TIME CHECK ====
-def check_office_hours():
-    now = datetime.datetime.now(pytz.timezone('Asia/Ho_Chi_Minh'))
-    return now.weekday() < 6 and (now.hour > 8 or (now.hour == 8 and now.minute >= 30)) and now.hour < 17
-
-def get_time_slot():
-    now = datetime.datetime.now(pytz.timezone('Asia/Ho_Chi_Minh'))
-    if 17 <= now.hour < 19:
-        return "early_evening"
-    elif 19 <= now.hour <= 23:
-        return "late_evening"
-    return "office_hours"
-
-# ==== GROUP STATUS ====
 def get_cached_group_data():
     now = time()
     if now - GROUP_CACHE["last_updated"] > CACHE_TTL:
@@ -60,22 +45,56 @@ def get_cached_group_data():
         GROUP_CACHE["last_updated"] = now
     return GROUP_CACHE["data"]
 
-def is_group_active(group_id):
+def is_group_active(group_id: int) -> bool:
     records = get_cached_group_data()
-    return any(str(row["group_id"]) == str(group_id) and str(row["active"]).lower() == "true" for row in records)
+    for row in records:
+        if str(row["group_id"]) == str(group_id) and str(row["active"]).lower() == "true":
+            return True
+    return False
 
-# ==== WELCOME HANDLER ====
-async def welcome_new_member(update: Update, context: CallbackContext):
-    for member in update.message.new_chat_members:
-        if member.id == context.bot.id:
-            await update.message.reply_text(
-                "Xin chào Quý khách.\nCảm ơn Quý khách đã tin tưởng sử dụng dịch vụ của CVT.\nNếu Quý khách cần hỗ trợ hoặc có bất kỳ vấn đề nào cần trao đổi, vui lòng để lại tin nhắn tại đây. Đội ngũ tư vấn sẽ theo dõi và phản hồi trong thời gian sớm nhất có thể ạ."
-            )
+# Logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-# ==== HANDLE MESSAGE ====
+def check_office_hours():
+    tz = pytz.timezone("Asia/Ho_Chi_Minh")
+    now = datetime.datetime.now(tz)
+    return now.weekday() < 6 and (8 < now.hour < 17 or (now.hour == 8 and now.minute >= 30))
+
+def get_time_slot():
+    tz = pytz.timezone('Asia/Ho_Chi_Minh')
+    now = datetime.datetime.now(tz)
+    hour = now.hour
+    if 17 <= hour < 19:
+        return "early_evening"
+    elif 19 <= hour <= 23:
+        return "late_evening"
+    else:
+        return "other"
+
+async def send_file_confirmation(msg):
+    if msg.document:
+        text = f"✅ Công ty Cổ phần Tư vấn và Đầu tư CVT đã nhận được tài liệu.
+📄 Tên file: {msg.document.file_name}"
+    elif msg.photo:
+        text = "✅ Công ty Cổ phần Tư vấn và Đầu tư CVT đã nhận được hình ảnh."
+    elif msg.video:
+        duration = str(datetime.timedelta(seconds=msg.video.duration))
+        text = f"✅ Công ty Cổ phần Tư vấn và Đầu tư CVT đã nhận được video.
+⏱ Thời gian: {duration}"
+    elif msg.voice:
+        duration = str(datetime.timedelta(seconds=msg.voice.duration))
+        text = f"✅ Công ty Cổ phần Tư vấn và Đầu tư CVT đã nhận được tin nhắn thoại.
+⏱ Thời gian: {duration}"
+    else:
+        text = "✅ Công ty Cổ phần Tư vấn và Đầu tư CVT đã nhận được tin nhắn của Quý khách"
+
+    follow_up = "\nBộ phận Chăm sóc Khách hàng sẽ xem xét và phản hồi trong thời gian sớm nhất..\nCảm ơn Quý khách đã tin tưởng và lựa chọn dịch vụ của CVT.!"
+    await msg.reply_text(text + follow_up)
+
 async def handle_message(update: Update, context: CallbackContext):
     msg = update.message
-    chat_id = msg.chat.id
+    chat_id = update.effective_chat.id
     user_id = msg.from_user.id
 
     if not msg or msg.from_user.is_bot or not is_group_active(chat_id):
@@ -88,74 +107,78 @@ async def handle_message(update: Update, context: CallbackContext):
     if any(keyword in text for keyword in ["http", "t.me", "@bot", "vpn"]):
         return
 
-    # Nếu đã có nhân viên xử lý thì bot ngưng phản hồi
-    if conversation_handlers.get(chat_id) and conversation_handlers[chat_id] in INTERNAL_USERS_ID:
-        return
-
-    # Nếu nhân viên gửi tin → gán làm người tiếp nhận và thông báo
-    if user_id in INTERNAL_USERS_ID:
-        conversation_handlers[chat_id] = user_id
-        await msg.reply_text(f"Nhân viên {msg.from_user.full_name} đã tiếp nhận tin nhắn. Cuộc trò chuyện sẽ được chuyển tiếp cho nhân viên phụ trách.")
-        return
-
-    # Khách hàng gửi tin nhắn:
     is_office = check_office_hours()
     time_slot = get_time_slot()
-    state = user_states.get(user_id, None)
+    state = user_states.get(user_id)
 
-    conversation_last_message_time[chat_id] = time()
-    if chat_id not in conversation_handlers:
-        conversation_handlers[chat_id] = None
-
+    # Xử lý ngoài giờ làm việc
     if not is_office:
         if state == "notified_out_of_office":
             await msg.reply_text(
-                "🌙 Hiện tại, Công ty Cổ phần Tư vấn và Đầu tư CVT đang ngoài giờ làm việc (08:30 – 17:00, Thứ 2 đến Thứ 7, không tính thời gian nghỉ trưa).\nQuý khách vui lòng để lại tin nhắn – chúng tôi sẽ liên hệ lại trong thời gian làm việc sớm nhất.\nTrân trọng cảm ơn!"
+                "🌙 Hiện tại, Công ty Cổ phần Tư vấn và Đầu tư CVT đang ngoài giờ làm việc (08:30 – 17:00, Thứ 2 đến Thứ 7, không tính thời gian nghỉ trưa).\n"
+                "Quý khách vui lòng để lại tin nhắn – chúng tôi sẽ liên hệ lại trong thời gian làm việc sớm nhất.\n"
+                "Trân trọng cảm ơn!"
             )
         elif time_slot == "early_evening":
             await msg.reply_text(
-                "🎉 Xin chào Quý khách!\nCảm ơn Quý khách đã liên hệ với Công ty Cổ phần Tư vấn và Đầu tư CVT.\nChúng tôi sẽ phản hồi trong thời gian sớm nhất.\n🕒 Giờ làm việc: 08:30 – 17:00 (Thứ 2 đến Thứ 7)\n🗓 Chủ nhật & Ngày lễ: Nghỉ\nNgoài giờ, Quý khách vui lòng để lại tin nhắn."
+                "🎉 Xin chào Quý khách!\n"
+                "Cảm ơn Quý khách đã liên hệ với Công ty Cổ phần Tư vấn và Đầu tư CVT.\n"
+                "Chúng tôi sẽ phản hồi trong thời gian sớm nhất.\n\n"
+                "🕒 Giờ làm việc: 08:30 – 17:00 (Thứ 2 đến Thứ 7)\n"
+                "📅 Chủ nhật & Ngày lễ: Nghỉ\n"
+                "Ngoài giờ làm việc, Quý khách vui lòng để lại tin nhắn – chúng tôi sẽ phản hồi ngay khi làm việc sớm nhất."
             )
             user_states[user_id] = "notified_out_of_office"
         else:
             await msg.reply_text(
-                "🌙 Hiện tại, CVT đang ngoài giờ làm việc. Vui lòng để lại tin nhắn – chúng tôi sẽ liên hệ trong giờ làm việc!"
+                "🌙 Hiện tại, Công ty Cổ phần Tư vấn và Đầu tư CVT đang ngoài giờ làm việc (08:30 – 17:00, Thứ 2 đến Thứ 7, không tính thời gian nghỉ trưa).\n"
+                "Quý khách vui lòng để lại tin nhắn – chúng tôi sẽ liên hệ lại trong thời gian làm việc sớm nhất.\n"
+                "Trân trọng cảm ơn!"
             )
         return
 
+    # Trong giờ làm việc – chào khách
     if state is None:
         await msg.reply_text(
-            "Xin chào Quý khách.\nCảm ơn Quý khách đã tin tưởng sử dụng dịch vụ của CVT.\nNếu Quý khách cần hỗ trợ hoặc có vấn đề, vui lòng để lại tin nhắn tại đây. Đội ngũ sẽ phản hồi sớm nhất ạ."
+            "Xin chào Quý khách.\n"
+            "Cảm ơn Quý khách đã tin tưởng sử dụng dịch vụ của CVT.\n"
+            "Nếu Quý khách cần hỗ trợ hoặc có bất kỳ vấn đề nào cần trao đổi, vui lòng để lại tin nhắn tại đây.\n"
+            "Đội ngũ tư vấn sẽ theo dõi và phản hồi Quý khách trong thời gian sớm nhất có thể ạ."
         )
         user_states[user_id] = "active"
 
+    # Nếu có tập tin
     if msg.document or msg.photo or msg.video or msg.voice:
         await send_file_confirmation(msg)
 
-# ==== FILE CONFIRMATION ====
-async def send_file_confirmation(msg):
-    if msg.document:
-        text = f"✅ CVT đã nhận được tài liệu.\n📄 Tên file: {msg.document.file_name}"
-    elif msg.photo:
-        text = "✅ CVT đã nhận được hình ảnh."
-    elif msg.video:
-        duration = str(datetime.timedelta(seconds=msg.video.duration))
-        text = f"✅ CVT đã nhận được video.\n⏱ Thời gian: {duration}"
-    elif msg.voice:
-        duration = str(datetime.timedelta(seconds=msg.voice.duration))
-        text = f"✅ CVT đã nhận được tin nhắn thoại.\n⏱ Thời gian: {duration}"
-    else:
-        text = "✅ CVT đã nhận được tin nhắn."
-    follow_up = "\nBộ phận Dịch vụ khách hàng sẽ phản hồi trong thời gian sớm nhất.\nCảm ơn Quý khách đã tin tưởng CVT!"
-    await msg.reply_text(text + follow_up)
+    # Cập nhật thời gian cuối và người xử lý
+    conversation_last_message_time[chat_id] = time()
+    conversation_handlers[chat_id] = user_id if user_id in INTERNAL_USERS_ID else None
 
-# ==== RUN ====
-def run():
-    application = Application.builder().token(BOT_TOKEN).build()
-    application.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, welcome_new_member))
-    application.add_handler(MessageHandler(filters.TEXT | filters.PHOTO | filters.Document.ALL | filters.VIDEO | filters.VOICE, handle_message))
+async def monitor_conversations(application):
+    while True:
+        now = time()
+        for chat_id, last_time in list(conversation_last_message_time.items()):
+            if now - last_time > MAX_IDLE_TIME:
+                handler_id = conversation_handlers.get(chat_id)
+                if handler_id:
+                    await application.bot.send_message(
+                        chat_id=chat_id,
+                        text=f"⏱ Nhân viên đã rời cuộc trò chuyện. CVT xin cảm ơn Quý khách đã trao đổi. Chúng tôi sẽ hỗ trợ tiếp nếu cần!"
+                    )
+                conversation_handlers.pop(chat_id, None)
+                conversation_last_message_time[chat_id] = now
+        await asyncio.sleep(30)
+
+async def main():
+    from telegram.ext import defaults
+    token = os.environ.get("BOT_TOKEN")
+    application = Application.builder().token(token).build()
+    application.add_handler(MessageHandler(filters.ALL, handle_message))
+    asyncio.create_task(monitor_conversations(application))
     print("✅ Bot is running...")
-    application.run_polling()
+    await application.run_polling()
 
-if __name__ == '__main__':
-    run()
+if __name__ == "__main__":
+    import asyncio
+    asyncio.run(main())
