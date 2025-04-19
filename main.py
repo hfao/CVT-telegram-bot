@@ -155,16 +155,15 @@ async def handle_callback(update: Update, context: CallbackContext):
     conversation_handlers[chat_id] = user_id
     await query.message.reply_text(f"Nhân viên {query.from_user.full_name} đã tiếp nhận tin nhắn này. Cuộc trò chuyện sẽ được chuyển tiếp cho nhân viên phụ trách.")
 
-# ==== MAIN ====
-async def main():
+# ==== RUN ====
+def run():
     application = Application.builder().token(BOT_TOKEN).build()
     application.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, welcome_new_member))
     application.add_handler(MessageHandler(filters.TEXT | filters.PHOTO | filters.Document.ALL | filters.VIDEO | filters.VOICE, handle_message))
     application.add_handler(CallbackQueryHandler(handle_callback))
 
     print("✅ Bot is running...")
-    await application.run_polling()
+    application.run_polling()
 
 if __name__ == '__main__':
-    import asyncio
-    asyncio.run(main())
+    run()
