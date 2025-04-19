@@ -37,7 +37,7 @@ INTERNAL_USERS_ID = [7934716459, 7985186615, 6129180120, 6278235756]
 user_states = {}
 conversation_last_message_time = {}
 conversation_handlers = {}
-MAX_IDLE_TIME = 1800
+MAX_IDLE_TIME = 300 # giảm xuống 5p
 
 # ==== TIME CHECK ====
 def check_office_hours():
