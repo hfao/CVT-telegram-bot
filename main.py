@@ -6,7 +6,7 @@ import os
 import json
 import asyncio
 from time import time
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update
 from telegram.ext import Application, MessageHandler, CallbackContext, filters
 from oauth2client.service_account import ServiceAccountCredentials
 
