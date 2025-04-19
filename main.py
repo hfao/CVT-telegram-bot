@@ -144,17 +144,26 @@ async def send_file_confirmation(msg):
     await msg.reply_text(text + follow_up)
 
 # ==== CALLBACK BUTTON ====
+# ==== CALLBACK BUTTON ====
 async def handle_callback(update: Update, context: CallbackContext):
     query = update.callback_query
     user_id = query.from_user.id
     data = query.data
+
     if not data.startswith("start_"):
         return
+
+    # Kiểm tra người nhấn có phải là nhân viên không
+    if user_id not in INTERNAL_USERS_ID:
+        await query.answer("Chỉ nhân viên mới có thể tiếp nhận cuộc trò chuyện này.")
+        return
+
     chat_id = int(data.split("_")[1])
-
     conversation_handlers[chat_id] = user_id
-    await query.message.reply_text(f"Nhân viên {query.from_user.full_name} đã tiếp nhận tin nhắn này. Cuộc trò chuyện sẽ được chuyển tiếp cho nhân viên phụ trách.")
 
+    await query.message.reply_text(
+        f"Nhân viên {query.from_user.full_name} đã tiếp nhận tin nhắn này. Cuộc trò chuyện sẽ được chuyển tiếp cho nhân viên phụ trách."
+    )
 # ==== RUN ====
 def run():
     application = Application.builder().token(BOT_TOKEN).build()
