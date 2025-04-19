@@ -164,11 +164,8 @@ async def main():
     application.add_handler(MessageHandler(filters.TEXT | filters.PHOTO | filters.Document.ALL | filters.VIDEO | filters.VOICE, handle_message))
     application.add_handler(CallbackQueryHandler(handle_callback))
 
-    await application.initialize()
-    await application.start()
     print("✅ Bot is running...")
-    await application.updater.start_polling()
-    await application.updater.idle()
+    await application.run_polling()
 
 if __name__ == '__main__':
     asyncio.run(main())
