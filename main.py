@@ -6,8 +6,6 @@ import os
 import json
 import asyncio
 from time import time
-from flask import Flask
-from threading import Thread
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, MessageHandler, CallbackContext, filters, CallbackQueryHandler
 from oauth2client.service_account import ServiceAccountCredentials
@@ -41,13 +39,6 @@ user_states = {}
 conversation_last_message_time = {}
 conversation_handlers = {}
 MAX_IDLE_TIME = 1800
-
-# ==== FLASK KEEP ALIVE ====
-app = Flask('')
-@app.route('/')
-def home(): return "CVT bot is live."
-def run_web(): app.run(host='0.0.0.0', port=8080)
-def keep_alive(): Thread(target=run_web).start()
 
 # ==== TIME CHECK ====
 def check_office_hours():
@@ -166,23 +157,18 @@ async def handle_callback(update: Update, context: CallbackContext):
     await query.message.reply_text(f"Nhân viên {query.from_user.full_name} đã tiếp nhận tin nhắn này. Cuộc trò chuyện sẽ được chuyển tiếp cho nhân viên phụ trách.")
 
 # ==== MAIN ====
-def main():
+async def main():
     application = Application.builder().token(BOT_TOKEN).build()
 
     application.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, welcome_new_member))
     application.add_handler(MessageHandler(filters.TEXT | filters.PHOTO | filters.Document.ALL | filters.VIDEO | filters.VOICE, handle_message))
     application.add_handler(CallbackQueryHandler(handle_callback))
 
-    keep_alive()
+    await application.initialize()
+    await application.start()
+    print("✅ Bot is running...")
+    await application.updater.start_polling()
+    await application.updater.idle()
 
-    # ✅ Gọi xóa webhook và chạy polling trong thread async đúng cách
-    async def start():
-        await application.bot.delete_webhook(drop_pending_updates=True)
-        await application.initialize()
-        await application.start()
-        await application.updater.start_polling()
-
-    asyncio.get_event_loop().create_task(start())
-    
 if __name__ == '__main__':
-    main()
+    asyncio.run(main())
