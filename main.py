@@ -175,7 +175,7 @@ async def main():
     application.add_handler(MessageHandler(filters.ALL, handle_message))
     asyncio.create_task(monitor_conversations(application))
     print("✅ Bot is running...")
-    await application.run_polling()
+    await application.run_polling()  # Gọi run_polling trực tiếp mà không dùng asyncio.run()
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()  # Gọi main() mà không cần async event loop
