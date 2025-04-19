@@ -74,22 +74,22 @@ def get_time_slot():
 
 async def send_file_confirmation(msg):
     if msg.document:
-        text = f"✅ Công ty Cổ phần Tư vấn và Đầu tư CVT đã nhận được tài liệu.
-📄 Tên file: {msg.document.file_name}"
+        text = f"""✅ Công ty Cổ phần Tư vấn và Đầu tư CVT đã nhận được tài liệu.
+📄 Tên file: {msg.document.file_name}"""
     elif msg.photo:
         text = "✅ Công ty Cổ phần Tư vấn và Đầu tư CVT đã nhận được hình ảnh."
     elif msg.video:
         duration = str(datetime.timedelta(seconds=msg.video.duration))
-        text = f"✅ Công ty Cổ phần Tư vấn và Đầu tư CVT đã nhận được video.
-⏱ Thời gian: {duration}"
+        text = f"""✅ Công ty Cổ phần Tư vấn và Đầu tư CVT đã nhận được video.
+⏱ Thời gian: {duration}"""
     elif msg.voice:
         duration = str(datetime.timedelta(seconds=msg.voice.duration))
-        text = f"✅ Công ty Cổ phần Tư vấn và Đầu tư CVT đã nhận được tin nhắn thoại.
-⏱ Thời gian: {duration}"
+        text = f"""✅ Công ty Cổ phần Tư vấn và Đầu tư CVT đã nhận được tin nhắn thoại.
+⏱ Thời gian: {duration}"""
     else:
         text = "✅ Công ty Cổ phần Tư vấn và Đầu tư CVT đã nhận được tin nhắn của Quý khách"
 
-    follow_up = "\nBộ phận Chăm sóc Khách hàng sẽ xem xét và phản hồi trong thời gian sớm nhất..\nCảm ơn Quý khách đã tin tưởng và lựa chọn dịch vụ của CVT.!"
+    follow_up = "\nBộ phận Chăm sóc Khách hàng sẽ xem xét và phản hồi trong thời gian sớm nhất.\nCảm ơn Quý khách đã tin tưởng và lựa chọn dịch vụ của CVT.!"
     await msg.reply_text(text + follow_up)
 
 async def handle_message(update: Update, context: CallbackContext):
