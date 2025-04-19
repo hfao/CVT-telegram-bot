@@ -177,6 +177,6 @@ async def main():
     print("✅ Bot is running...")
     await application.run_polling()
 
-# Chạy chương trình chính trong môi trường hỗ trợ async (nếu Railway đã quản lý event loop)
+# Sử dụng asyncio.run để chạy main() trong môi trường có event loop
 if __name__ == "__main__":
-    asyncio.get_event_loop().run_until_complete(main())  # Chạy trực tiếp với event loop hiện tại
+    asyncio.run(main())  # Sử dụng asyncio.run() thay vì get_event_loop
