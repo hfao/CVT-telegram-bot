@@ -4,6 +4,7 @@ import pytz
 import gspread
 import os
 import json
+import asyncio
 from time import time
 from flask import Flask
 from threading import Thread
@@ -170,8 +171,14 @@ def main():
     application.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, welcome_new_member))
     application.add_handler(MessageHandler(filters.TEXT | filters.PHOTO | filters.Document.ALL | filters.VIDEO | filters.VOICE, handle_message))
     application.add_handler(CallbackQueryHandler(handle_callback))
+
     keep_alive()
-    application.run_polling()
+
+    async def run():
+        await application.bot.delete_webhook(drop_pending_updates=True)  # 🛠 Fix conflict
+        await application.run_polling()
+
+    asyncio.run(run())
 
 if __name__ == '__main__':
     main()
