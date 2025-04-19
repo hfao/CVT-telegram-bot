@@ -4,7 +4,6 @@ import pytz
 import gspread
 import os
 import json
-import asyncio
 from time import time
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, MessageHandler, CallbackContext, filters, CallbackQueryHandler
@@ -159,7 +158,6 @@ async def handle_callback(update: Update, context: CallbackContext):
 # ==== MAIN ====
 async def main():
     application = Application.builder().token(BOT_TOKEN).build()
-
     application.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, welcome_new_member))
     application.add_handler(MessageHandler(filters.TEXT | filters.PHOTO | filters.Document.ALL | filters.VIDEO | filters.VOICE, handle_message))
     application.add_handler(CallbackQueryHandler(handle_callback))
@@ -168,4 +166,5 @@ async def main():
     await application.run_polling()
 
 if __name__ == '__main__':
+    import asyncio
     asyncio.run(main())
