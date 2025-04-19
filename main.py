@@ -1,4 +1,3 @@
-
 import logging
 import datetime
 import pytz
@@ -7,7 +6,7 @@ import os
 import json
 import asyncio
 from time import time
-from telegram import Update
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, MessageHandler, CallbackContext, filters
 from oauth2client.service_account import ServiceAccountCredentials
 
@@ -89,7 +88,7 @@ async def send_file_confirmation(msg):
     else:
         text = "✅ Công ty Cổ phần Tư vấn và Đầu tư CVT đã nhận được tin nhắn của Quý khách"
 
-    follow_up = "\nBộ phận Chăm sóc Khách hàng sẽ xem xét và phản hồi trong thời gian sớm nhất.\nCảm ơn Quý khách đã tin tưởng và lựa chọn dịch vụ của CVT.!"
+    follow_up = "\nBộ phận Chăm sóc Khách hàng sẽ xem xét và phản hồi trong thời gian sớm nhất.\nCảm ơn Quý khách đã tin tưởng và lựa chọn dịch vụ của CVT!"
     await msg.reply_text(text + follow_up)
 
 async def handle_message(update: Update, context: CallbackContext):
@@ -171,7 +170,6 @@ async def monitor_conversations(application):
         await asyncio.sleep(30)
 
 async def main():
-    from telegram.ext import defaults
     token = os.environ.get("BOT_TOKEN")
     application = Application.builder().token(token).build()
     application.add_handler(MessageHandler(filters.ALL, handle_message))
