@@ -8,24 +8,25 @@ from time import time
 from flask import Flask
 from threading import Thread
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, MessageHandler, CallbackContext, filters, CommandHandler, CallbackQueryHandler
+from telegram.ext import Application, MessageHandler, CallbackContext, filters, CallbackQueryHandler
 from oauth2client.service_account import ServiceAccountCredentials
 
-# ====== Danh sách ID nhân viên nội bộ ======
-INTERNAL_USERS_ID = [7934716459, 7985186615, 6129180120, 6278235756]
+# ==== ENV CONFIG ====
+BOT_TOKEN = os.environ.get("BOT_TOKEN")
+GOOGLE_CREDS_JSON = os.environ.get("GOOGLE_CREDS_JSON")
 
-# ====== CACHE GOOGLE SHEET Dữ LIỆU NHÓM ======
-GROUP_CACHE = {"data": [], "last_updated": 0}
-CACHE_TTL = 300  # giây (5 phút)
+if not BOT_TOKEN or not GOOGLE_CREDS_JSON:
+    raise ValueError("Missing environment variables BOT_TOKEN or GOOGLE_CREDS_JSON")
 
-# ========== CONFIG GOOGLE SHEETS ==========
+# ==== LOGGING ====
+logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
+logger = logging.getLogger(__name__)
 
+# ==== GOOGLE SHEET SETUP ====
 SHEET_ID = "1ASeRadkkokhqOflRETw6sGJTyJ65Y0XQi5mvFmivLnY"
 SHEET_NAME = "Sheet1"
-
-GOOGLE_CREDS_JSON = os.environ.get("GOOGLE_CREDS_JSON")
-if not GOOGLE_CREDS_JSON:
-    raise ValueError("❌ GOOGLE_CREDS_JSON environment variable is missing!")
+GROUP_CACHE = {"data": [], "last_updated": 0}
+CACHE_TTL = 300
 
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
 credentials_dict = json.loads(GOOGLE_CREDS_JSON)
@@ -33,6 +34,34 @@ credentials = ServiceAccountCredentials.from_json_keyfile_dict(credentials_dict,
 gc = gspread.authorize(credentials)
 sheet = gc.open_by_key(SHEET_ID).worksheet(SHEET_NAME)
 
+# ==== CONSTANTS ====
+INTERNAL_USERS_ID = [7934716459, 7985186615, 6129180120, 6278235756]
+user_states = {}
+conversation_last_message_time = {}
+conversation_handlers = {}
+MAX_IDLE_TIME = 1800
+
+# ==== FLASK KEEP ALIVE ====
+app = Flask('')
+@app.route('/')
+def home(): return "CVT bot is live."
+def run_web(): app.run(host='0.0.0.0', port=8080)
+def keep_alive(): Thread(target=run_web).start()
+
+# ==== TIME CHECK ====
+def check_office_hours():
+    now = datetime.datetime.now(pytz.timezone('Asia/Ho_Chi_Minh'))
+    return now.weekday() < 6 and (now.hour > 8 or (now.hour == 8 and now.minute >= 30)) and now.hour < 17
+
+def get_time_slot():
+    now = datetime.datetime.now(pytz.timezone('Asia/Ho_Chi_Minh'))
+    if 17 <= now.hour < 19:
+        return "early_evening"
+    elif 19 <= now.hour <= 23:
+        return "late_evening"
+    return "office_hours"
+
+# ==== GROUP STATUS ====
 def get_cached_group_data():
     now = time()
     if now - GROUP_CACHE["last_updated"] > CACHE_TTL:
@@ -40,144 +69,78 @@ def get_cached_group_data():
         GROUP_CACHE["last_updated"] = now
     return GROUP_CACHE["data"]
 
-# ====== LOGGING ======
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-user_states = {}
-
-# Lưu thời gian cuối cùng nhận tin nhắn từ mỗi người dùng
-conversation_last_message_time = {}
-
-# Đặt thời gian chờ tối đa (30 phút = 1800 giây)
-MAX_IDLE_TIME = 1800  # 30 minutes
-
-def check_office_hours() -> bool:
-    tz = pytz.timezone('Asia/Ho_Chi_Minh')
-    now = datetime.datetime.now(tz)
-    if now.weekday() < 6:
-        if (8 < now.hour < 17) or (now.hour == 8 and now.minute >= 30):
-            return True
-    return False
-
-def is_group_active(group_id: int) -> bool:
+def is_group_active(group_id):
     records = get_cached_group_data()
-    for row in records:
-        if str(row["group_id"]) == str(group_id) and str(row["active"]).lower() == "true":
-            return True
-    return False
+    return any(str(row["group_id"]) == str(group_id) and str(row["active"]).lower() == "true" for row in records)
 
-def is_group_registered(group_id: int) -> bool:
-    records = get_cached_group_data()
-    return any(str(row["group_id"]) == str(group_id) for row in records)
-
-# ====== Welcome new member - thêm lại hàm welcome_new_member ======
+# ==== WELCOME HANDLER ====
 async def welcome_new_member(update: Update, context: CallbackContext):
-    chat = update.effective_chat
-    group_id = chat.id
-    group_name = chat.title or "N/A"
-
-    if not is_group_registered(group_id):
-        await update.message.reply_text(
-            f"🚨 BOT được thêm vào nhóm chưa đăng ký!\nID: `{group_id}`\nTên nhóm: {group_name}",
-            parse_mode="Markdown"
-        )
-        return
-
-    if not is_group_active(group_id):
-        return
-
     for member in update.message.new_chat_members:
         if member.id == context.bot.id:
-            return
+            await update.message.reply_text(
+                "Xin chào Quý khách.\nCảm ơn Quý khách đã tin tưởng sử dụng dịch vụ của CVT.\nNếu Quý khách cần hỗ trợ hoặc có bất kỳ vấn đề nào cần trao đổi, vui lòng để lại tin nhắn tại đây. Đội ngũ tư vấn sẽ theo dõi và phản hồi trong thời gian sớm nhất có thể ạ."
+            )
 
-        message = (
-            "Xin chào Quý khách.\n"
-            "Cảm ơn Quý khách đã tin tưởng sử dụng dịch vụ của CVT.\n"
-            "Nếu Quý khách cần hỗ trợ hoặc có bất kỳ vấn đề nào cần trao đổi, "
-            "vui lòng để lại tin nhắn tại đây. Đội ngũ tư vấn sẽ theo dõi và phản hồi Quý khách trong thời gian sớm nhất có thể ạ."
-        )
-        await update.message.reply_text(message)
-
-# ====== Xử lý tin nhắn từ khách hàng ======
+# ==== HANDLE MESSAGE ====
 async def handle_message(update: Update, context: CallbackContext):
     msg = update.message
+    chat_id = msg.chat.id
+    user_id = msg.from_user.id
 
-    if not msg or msg.from_user.is_bot:
+    if not msg or msg.from_user.is_bot or not is_group_active(chat_id):
         return
 
-    chat_id = update.effective_chat.id
-    if not is_group_active(chat_id):
+    if hasattr(msg, "forward_from") or hasattr(msg, "forward_from_chat"):
         return
 
-    if hasattr(msg, "forward_from") and msg.forward_from and msg.forward_from.is_bot:
+    text = msg.text.lower() if msg.text else ""
+    if any(keyword in text for keyword in ["http", "t.me", "@bot", "vpn"]):
         return
-    if hasattr(msg, "forward_from_chat") and msg.forward_from_chat:
+
+    is_office = check_office_hours()
+    time_slot = get_time_slot()
+    state = user_states.get(user_id, None)
+
+    conversation_last_message_time[chat_id] = time()
+    if chat_id not in conversation_handlers:
+        conversation_handlers[chat_id] = None
+
+    if not is_office:
+        if state == "notified_out_of_office":
+            await msg.reply_text(
+                "🌙 Hiện tại, Công ty Cổ phần Tư vấn và Đầu tư CVT đang ngoài giờ làm việc (08:30 – 17:00, Thứ 2 đến Thứ 7, không tính thời gian nghỉ trưa).\nQuý khách vui lòng để lại tin nhắn – chúng tôi sẽ liên hệ lại trong thời gian làm việc sớm nhất.\nTrân trọng cảm ơn!"
+            )
+        elif time_slot == "early_evening":
+            await msg.reply_text(
+                "🎉 Xin chào Quý khách!\nCảm ơn Quý khách đã liên hệ với Công ty Cổ phần Tư vấn và Đầu tư CVT.\nChúng tôi sẽ phản hồi trong thời gian sớm nhất.\n🕒 Giờ làm việc: 08:30 – 17:00 (Thứ 2 đến Thứ 7)\n🗓 Chủ nhật & Ngày lễ: Nghỉ\nNgoài giờ, Quý khách vui lòng để lại tin nhắn."
+            )
+            user_states[user_id] = "notified_out_of_office"
+        else:
+            await msg.reply_text(
+                "🌙 Hiện tại, CVT đang ngoài giờ làm việc. Vui lòng để lại tin nhắn – chúng tôi sẽ liên hệ trong giờ làm việc!"
+            )
         return
 
-    if msg.text:
-        lowered = msg.text.lower()
-        if any(x in lowered for x in ["http", "t.me/", "@bot", "vpn", "@speeeedvpnbot"]):
-            return
-
-    user_id = update.message.from_user.id
-    is_office_hours = check_office_hours()
-    current_state = user_states.get(user_id)
-
-    # Mẫu 1: Tin nhắn lần đầu khi khách nhắn đến hoặc mới vô nhóm
-    if not is_office_hours:
-        # Mẫu 2: Tin nhắn ngoài giờ làm việc
-        await update.message.reply_text(
-            "🎉 Xin chào Quý khách!\n"
-            "Cảm ơn Quý khách đã liên hệ với Công ty Cổ phần Tư vấn và Đầu tư CVT.\n"
-            "Chúng tôi sẽ phản hồi trong thời gian sớm nhất.\n\n"
-            "🕒 Giờ làm việc: 08:30 – 17:00 (Thứ 2 đến Thứ 7, không tính thời gian nghỉ trưa)\n"
-            "📅 Chủ nhật & Ngày lễ: Nghỉ\n"
-            "Ngoài giờ làm việc, Quý khách vui lòng để lại tin nhắn – chúng tôi sẽ phản hồi ngay khi làm việc sớm nhất."
+    if state is None:
+        await msg.reply_text(
+            "Xin chào Quý khách.\nCảm ơn Quý khách đã tin tưởng sử dụng dịch vụ của CVT.\nNếu Quý khách cần hỗ trợ hoặc có vấn đề, vui lòng để lại tin nhắn tại đây. Đội ngũ sẽ phản hồi sớm nhất ạ."
         )
-        return
+        user_states[user_id] = "active"
 
-    # Mẫu 1: Tin nhắn lần đầu khi khách nhắn đến hoặc mới vô nhóm
-    await update.message.reply_text(
-        "Xin chào Quý khách.\n"
-        "Cảm ơn Quý khách đã tin tưởng sử dụng dịch vụ của CVT.\n"
-        "Nếu Quý khách cần hỗ trợ hoặc có bất kỳ vấn đề nào cần trao đổi, vui lòng để lại tin nhắn tại đây. Đội ngũ tư vấn sẽ theo dõi và phản hồi Quý khách trong thời gian sớm nhất có thể ạ.\nn"
-    )
+    if msg.document or msg.photo or msg.video or msg.voice:
+        await send_file_confirmation(msg)
 
-    # Gửi nút "Start" cho khách hàng khi họ gửi tin nhắn
-    keyboard = [
-        [InlineKeyboardButton("Start", callback_data="start_conversation")]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text("Chào bạn! Nhấn nút 'Start' để bắt đầu trò chuyện", reply_markup=reply_markup)
+    if conversation_handlers[chat_id] is None:
+        keyboard = [[InlineKeyboardButton("Start", callback_data=f"start_{chat_id}")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await msg.reply_text("Chào bạn! Nhấn nút 'Start' để bắt đầu trò chuyện với khách hàng", reply_markup=reply_markup)
 
-# ====== Xử lý callback khi nhấn nút Start ======
-async def start_conversation(update: Update, context: CallbackContext):
-    query = update.callback_query
-    user_id = query.from_user.id
-    chat_id = query.message.chat.id
-
-    # Đảm bảo chỉ có nhân viên mới nhận được tin nhắn sau khi nhấn Start
-    if user_id not in INTERNAL_USERS_ID:
-        await query.answer("Chỉ nhân viên mới có thể nhận và trả lời tin nhắn.")
-        return
-
-    # Đánh dấu trạng thái cuộc trò chuyện của khách hàng
-    user_states[user_id] = "active"
-    await query.message.reply_text(f"Nhân viên {query.from_user.full_name} đã bắt đầu phản hồi! Cuộc trò chuyện đã được chuyển cho nhân viên.")
-
-    # Chuyển cuộc trò chuyện cho nhân viên
-    await send_confirmation(update)
-
-# Phản hồi xác nhận nhận được thông tin
-async def send_confirmation(update: Update):
-    msg = update.message
-    text = ""
-
-    if msg.photo:
-        text = "✅ CVT đã nhận được hình ảnh của quý khách."
-    elif msg.document:
+# ==== FILE CONFIRMATION ====
+async def send_file_confirmation(msg):
+    if msg.document:
         text = f"✅ CVT đã nhận được tài liệu.\n📄 Tên file: {msg.document.file_name}"
+    elif msg.photo:
+        text = "✅ CVT đã nhận được hình ảnh."
     elif msg.video:
         duration = str(datetime.timedelta(seconds=msg.video.duration))
         text = f"✅ CVT đã nhận được video.\n⏱ Thời gian: {duration}"
@@ -185,46 +148,30 @@ async def send_confirmation(update: Update):
         duration = str(datetime.timedelta(seconds=msg.voice.duration))
         text = f"✅ CVT đã nhận được tin nhắn thoại.\n⏱ Thời gian: {duration}"
     else:
-        text = "✅ CVT đã nhận được tin nhắn của quý khách."
-
-    follow_up = (
-        "\nBộ phận Dịch vụ khách hàng sẽ phản hồi trong thời gian sớm nhất.\n"
-        "Cảm ơn Quý khách đã tin tưởng CVT!"
-    )
+        text = "✅ CVT đã nhận được tin nhắn."
+    follow_up = "\nBộ phận Dịch vụ khách hàng sẽ phản hồi trong thời gian sớm nhất.\nCảm ơn Quý khách đã tin tưởng CVT!"
     await msg.reply_text(text + follow_up)
 
-# Xử lý lỗi
-async def error(update: Update, context: CallbackContext) -> None:
-    logger.warning(f'Update {update} caused error {context.error}')
+# ==== CALLBACK BUTTON ====
+async def handle_callback(update: Update, context: CallbackContext):
+    query = update.callback_query
+    user_id = query.from_user.id
+    data = query.data
+    if not data.startswith("start_"):
+        return
+    chat_id = int(data.split("_")[1])
 
-# Flask server để giữ bot sống
-app = Flask('')
+    conversation_handlers[chat_id] = user_id
+    await query.message.reply_text(f"Nhân viên {query.from_user.full_name} đã tiếp nhận tin nhắn này. Cuộc trò chuyện sẽ được chuyển tiếp cho nhân viên phụ trách.")
 
-@app.route('/')
-def home():
-    return "🤖 CVT Bot is running!"
-
-def run_web():
-    app.run(host='0.0.0.0', port=8080)
-
-def keep_alive():
-    Thread(target=run_web).start()
-
+# ==== MAIN ====
 def main():
-    token = os.environ.get("BOT_TOKEN")
-    application = Application.builder().token(token).build()
-
+    application = Application.builder().token(BOT_TOKEN).build()
     application.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, welcome_new_member))
-    application.add_handler(MessageHandler(
-        filters.TEXT | filters.PHOTO | filters.Document.ALL | filters.VIDEO | filters.VOICE,
-        handle_message
-    ))
-
-    application.add_handler(CallbackQueryHandler(start_conversation, pattern="start_conversation"))
-    application.add_error_handler(error)
+    application.add_handler(MessageHandler(filters.TEXT | filters.PHOTO | filters.Document.ALL | filters.VIDEO | filters.VOICE, handle_message))
+    application.add_handler(CallbackQueryHandler(handle_callback))
     keep_alive()
-
-    application.run_polling(drop_pending_updates=True)
+    application.run_polling()
 
 if __name__ == '__main__':
     main()
