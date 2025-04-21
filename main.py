@@ -173,6 +173,5 @@ async def monitor_conversations(application):
 if __name__ == "__main__":
     application = Application.builder().token(os.getenv("BOT_TOKEN")).build()
     application.add_handler(MessageHandler(filters.ALL, handle_message))
-    asyncio.create_task(monitor_conversations(application))  # Đảm bảo tạo task bất đồng bộ
     print("✅ Bot is running...")
     application.run_polling()  # Không cần sử dụng asyncio.run() nữa
