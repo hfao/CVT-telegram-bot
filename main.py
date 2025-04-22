@@ -211,4 +211,4 @@ if __name__ == "__main__":
     application.add_handler(MessageHandler(filters.ALL, handle_message))
     application.add_handler(ChatMemberHandler(log_group_info))  # Thêm ChatMemberHandler để theo dõi khi bot vào nhóm
     print("✅ Bot is running...")
-    application.run_polling()  # Không cần sử dụng asyncio.run() nữa
+    asyncio.run(application.run_polling())  # Chạy polling bằng asyncio.run()
