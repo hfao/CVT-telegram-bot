@@ -7,7 +7,7 @@ import json
 import asyncio
 from time import time
 from telegram import Update
-from telegram.ext import Application, MessageHandler, CallbackContext, filters
+from telegram.ext import Application, MessageHandler, CallbackContext, filters, ChatMemberHandler
 from oauth2client.service_account import ServiceAccountCredentials
 
 # ====== Danh sách ID nhân viên nội bộ ======
@@ -184,6 +184,6 @@ async def monitor_conversations(application):
 if __name__ == "__main__":
     application = Application.builder().token(os.getenv("BOT_TOKEN")).build()
     application.add_handler(MessageHandler(filters.ALL, handle_message))
-    application.add_handler(MessageHandler(filters.ChatMember.NEW_CHAT_MEMBERS, log_group_info))  # Sử dụng filters.ChatMember
+    application.add_handler(ChatMemberHandler(log_group_info))  # Thêm ChatMemberHandler để theo dõi khi bot vào nhóm
     print("✅ Bot is running...")
     application.run_polling()  # Không cần sử dụng asyncio.run() nữa
