@@ -73,8 +73,8 @@ def get_time_slot():
 
 # Logging khi bot vào nhóm
 async def log_group_info(update: Update, context: CallbackContext):
-    # Kiểm tra bot có được thêm vào nhóm không
-    if update.chat_member.new_chat_member:
+    # Kiểm tra xem update có chứa thông tin về sự thay đổi thành viên trong nhóm hay không
+    if update.chat_member and update.chat_member.new_chat_member:
         member = update.chat_member.new_chat_member
         if member.user.id == context.bot.id:  # Kiểm tra nếu bot được thêm vào nhóm
             group_id = update.effective_chat.id  # Lấy group_id
