@@ -74,13 +74,13 @@ def get_time_slot():
 # Logging khi bot vào nhóm
 async def log_group_info(update: Update, context: CallbackContext):
     # Kiểm tra bot có được thêm vào nhóm không
-    if update.message.new_chat_members:
-        for member in update.message.new_chat_members:
-            if member.id == context.bot.id:  # Kiểm tra nếu bot được thêm vào nhóm
-                group_id = update.effective_chat.id  # Lấy group_id
-                group_name = update.effective_chat.title  # Lấy tên nhóm
-                logger.info(f"Bot được thêm vào nhóm: {group_name} (ID nhóm: {group_id})")
-                # Bạn có thể thay print() bằng việc ghi vào Google Sheets hoặc cơ sở dữ liệu
+    if update.chat_member.new_chat_member:
+        member = update.chat_member.new_chat_member
+        if member.user.id == context.bot.id:  # Kiểm tra nếu bot được thêm vào nhóm
+            group_id = update.effective_chat.id  # Lấy group_id
+            group_name = update.effective_chat.title  # Lấy tên nhóm
+            logger.info(f"Bot được thêm vào nhóm: {group_name} (ID nhóm: {group_id})")
+            # Bạn có thể thay print() bằng việc ghi vào Google Sheets hoặc cơ sở dữ liệu
 
 async def send_file_confirmation(msg):
     if msg.document:
@@ -184,6 +184,6 @@ async def monitor_conversations(application):
 if __name__ == "__main__":
     application = Application.builder().token(os.getenv("BOT_TOKEN")).build()
     application.add_handler(MessageHandler(filters.ALL, handle_message))
-    application.add_handler(MessageHandler(filters.Status.NEW_CHAT_MEMBERS, log_group_info))  # Thêm handler cho sự kiện nhóm
+    application.add_handler(MessageHandler(filters.ChatMember.NEW_CHAT_MEMBERS, log_group_info))  # Sử dụng filters.ChatMember
     print("✅ Bot is running...")
     application.run_polling()  # Không cần sử dụng asyncio.run() nữa
