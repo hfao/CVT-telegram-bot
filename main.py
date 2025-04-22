@@ -19,7 +19,7 @@ conversation_last_message_time = {}
 conversation_handlers = {}
 MAX_IDLE_TIME = 300  # 5 phút
 
-# ========== Google Sheets ========== 
+# ========== Google Sheets ==========
 SHEET_ID = "1ASeRadkkokhqOflRETw6sGJTyJ65Y0XQi5mvFmivLnY"
 SHEET_NAME = "Sheet1"
 
