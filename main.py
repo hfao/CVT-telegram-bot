@@ -207,7 +207,6 @@ async def remove_webhook(application):
 # Chạy chương trình chính trong môi trường hỗ trợ async
 if __name__ == "__main__":
     application = Application.builder().token(os.getenv("BOT_TOKEN")).build()
-    asyncio.run(remove_webhook(application))  # Xóa webhook trước khi chạy polling
     application.add_handler(MessageHandler(filters.ALL, handle_message))
     application.add_handler(ChatMemberHandler(log_group_info))  # Thêm ChatMemberHandler để theo dõi khi bot vào nhóm
     print("✅ Bot is running...")
