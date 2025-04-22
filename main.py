@@ -196,9 +196,14 @@ async def monitor_conversations(application):
                 conversation_last_message_time[chat_id] = now
         await asyncio.sleep(30)
 
+# Xóa webhook trước khi bắt đầu polling
+async def remove_webhook(application):
+    await application.bot.delete_webhook()  # Xóa webhook nếu có
+
 # Chạy chương trình chính trong môi trường hỗ trợ async (nếu Railway đã quản lý event loop)
 if __name__ == "__main__":
     application = Application.builder().token(os.getenv("BOT_TOKEN")).build()
+    asyncio.create_task(remove_webhook(application))  # Đảm bảo webhook được xóa trước khi chạy polling
     application.add_handler(MessageHandler(filters.ALL, handle_message))
     application.add_handler(ChatMemberHandler(log_group_info))  # Thêm ChatMemberHandler để theo dõi khi bot vào nhóm
     print("✅ Bot is running...")
