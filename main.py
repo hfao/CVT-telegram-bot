@@ -178,5 +178,8 @@ async def remove_webhook(application):
 # Chạy chương trình chính trong môi trường hỗ trợ async
 if __name__ == "__main__":
     print("✅ Bot is running...")
-    asyncio.run(remove_webhook(application))  # Xóa webhook trước khi chạy polling
-    application.run_polling()  # Chạy polling mà không cần asyncio.run()
+
+    # Lấy event loop và khởi chạy polling
+    loop = asyncio.get_event_loop()  # Lấy event loop
+    loop.run_until_complete(remove_webhook(application))  # Xóa webhook trước khi chạy polling
+    loop.run_until_complete(application.run_polling())  # Chạy polling với event loop
