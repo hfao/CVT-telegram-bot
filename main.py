@@ -73,14 +73,23 @@ def get_time_slot():
 
 # Logging khi bot vào nhóm
 async def log_group_info(update: Update, context: CallbackContext):
-    # Kiểm tra xem update có chứa thông tin về sự thay đổi thành viên trong nhóm hay không
-    if update.chat_member and update.chat_member.new_chat_member:
-        member = update.chat_member.new_chat_member
-        if member.user.id == context.bot.id:  # Kiểm tra nếu bot được thêm vào nhóm
-            group_id = update.effective_chat.id  # Lấy group_id
-            group_name = update.effective_chat.title  # Lấy tên nhóm
-            logger.info(f"Bot được thêm vào nhóm: {group_name} (ID nhóm: {group_id})")
-            # Bạn có thể thay print() bằng việc ghi vào Google Sheets hoặc cơ sở dữ liệu
+    # Log xem hàm có được gọi hay không
+    logger.info("log_group_info function is called")
+    
+    # Kiểm tra xem chat_member có tồn tại không
+    if update.chat_member:
+        logger.info(f"Received chat_member data: {update.chat_member}")  # Log dữ liệu chat_member
+        if update.chat_member.new_chat_member:
+            member = update.chat_member.new_chat_member
+            logger.info(f"New chat member added: {member.user.id}")  # Log khi thành viên mới được thêm vào
+            if member.user.id == context.bot.id:  # Kiểm tra nếu bot được thêm vào nhóm
+                group_id = update.effective_chat.id  # Lấy group_id
+                group_name = update.effective_chat.title  # Lấy tên nhóm
+                logger.info(f"Bot được thêm vào nhóm: {group_name} (ID nhóm: {group_id})")
+            else:
+                logger.info(f"Bot không phải là thành viên mới trong nhóm.")
+    else:
+        logger.info("No chat_member data in update.")
 
 async def send_file_confirmation(msg):
     if msg.document:
