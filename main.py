@@ -198,12 +198,16 @@ async def monitor_conversations(application):
 
 # Xóa webhook trước khi bắt đầu polling
 async def remove_webhook(application):
-    await application.bot.delete_webhook()  # Xóa webhook nếu có
+    try:
+        await application.bot.delete_webhook()  # Xóa webhook nếu có
+        logger.info("Webhook deleted successfully.")
+    except Exception as e:
+        logger.error(f"Failed to delete webhook: {e}")
 
 # Chạy chương trình chính trong môi trường hỗ trợ async (nếu Railway đã quản lý event loop)
 if __name__ == "__main__":
     application = Application.builder().token(os.getenv("BOT_TOKEN")).build()
-    asyncio.create_task(remove_webhook(application))  # Đảm bảo webhook được xóa trước khi chạy polling
+    asyncio.run(remove_webhook(application))  # Xóa webhook trước khi chạy polling
     application.add_handler(MessageHandler(filters.ALL, handle_message))
     application.add_handler(ChatMemberHandler(log_group_info))  # Thêm ChatMemberHandler để theo dõi khi bot vào nhóm
     print("✅ Bot is running...")
