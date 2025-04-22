@@ -19,7 +19,7 @@ conversation_last_message_time = {}
 conversation_handlers = {}
 MAX_IDLE_TIME = 300  # 5 phút
 
-# ========== Google Sheets ==========
+# ========== Google Sheets ========== 
 SHEET_ID = "1ASeRadkkokhqOflRETw6sGJTyJ65Y0XQi5mvFmivLnY"
 SHEET_NAME = "Sheet1"
 
@@ -71,6 +71,11 @@ def get_time_slot():
     else:
         return "other"
 
+# Function to add group_id to Google Sheets
+def add_group_to_sheet(group_id):
+    logger.info(f"Adding Group ID: {group_id} to Google Sheets")
+    sheet.append_row([group_id])  # Append the group_id to the first column in the sheet
+
 # Logging khi bot vào nhóm
 async def log_group_info(update: Update, context: CallbackContext):
     # Log xem hàm có được gọi hay không
@@ -86,6 +91,9 @@ async def log_group_info(update: Update, context: CallbackContext):
                 group_id = update.effective_chat.id  # Lấy group_id
                 group_name = update.effective_chat.title  # Lấy tên nhóm
                 logger.info(f"Bot được thêm vào nhóm: {group_name} (ID nhóm: {group_id})")
+                
+                # Ghi group_id vào Google Sheets
+                add_group_to_sheet(group_id)
             else:
                 logger.info(f"Bot không phải là thành viên mới trong nhóm.")
     else:
