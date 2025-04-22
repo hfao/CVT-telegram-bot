@@ -204,7 +204,7 @@ async def remove_webhook(application):
     except Exception as e:
         logger.error(f"Failed to delete webhook: {e}")
 
-# Chạy chương trình chính trong môi trường hỗ trợ async (nếu Railway đã quản lý event loop)
+# Chạy chương trình chính trong môi trường hỗ trợ async
 if __name__ == "__main__":
     application = Application.builder().token(os.getenv("BOT_TOKEN")).build()
     asyncio.run(remove_webhook(application))  # Xóa webhook trước khi chạy polling
