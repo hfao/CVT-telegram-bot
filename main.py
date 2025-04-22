@@ -167,7 +167,16 @@ application.add_handler(MessageHandler(filters.ALL, handle_message))
 application.add_handler(CallbackQueryHandler(start_processing, pattern="^start_processing$"))  # Thêm handler cho nút Start
 application.add_handler(ChatMemberHandler(log_group_info))  # Thêm ChatMemberHandler để theo dõi khi bot vào nhóm
 
+# Xóa webhook trước khi bắt đầu polling
+async def remove_webhook(application):
+    try:
+        await application.bot.delete_webhook()  # Xóa webhook nếu có
+        logger.info("Webhook deleted successfully.")
+    except Exception as e:
+        logger.error(f"Failed to delete webhook: {e}")
+
 # Chạy chương trình chính trong môi trường hỗ trợ async
 if __name__ == "__main__":
     print("✅ Bot is running...")
+    asyncio.run(remove_webhook(application))  # Xóa webhook trước khi chạy polling
     asyncio.run(application.run_polling())  # Chạy polling bằng asyncio.run()
