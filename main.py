@@ -78,7 +78,6 @@ def add_group_to_sheet(group_id):
 
 # Logging khi bot vào nhóm
 async def log_group_info(update: Update, context: CallbackContext):
-    # Log xem hàm có được gọi hay không
     logger.info("log_group_info function is called")
     
     # Kiểm tra xem chat_member có tồn tại không
